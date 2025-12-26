@@ -6,6 +6,7 @@ esphome:
   friendly_name: Spa Controller
   includes:
     - uart_line_sensor.h
+    - spa_climate.h
 
 esp32:
   board: featheresp32-s2
@@ -103,10 +104,10 @@ text_sensor:
                   id(circ_switch).publish_state(false);
                 } else if (msg.find("STATUS:HEATING:ON") != std::string::npos) {
                   id(spa_heating_state) = true;
-                  id(heating_sensor).publish_state(true);
+                  ((SpaClimate*)id(spa_climate))->set_heating(true);
                 } else if (msg.find("STATUS:HEATING:OFF") != std::string::npos) {
                   id(spa_heating_state) = false;
-                  id(heating_sensor).publish_state(false);
+                  ((SpaClimate*)id(spa_climate))->set_heating(false);
                 } else if (msg.find("STATUS:STANDBY:ON") != std::string::npos) {
                   id(spa_standby_state) = true;
                   id(standby_sensor).publish_state(true);
@@ -134,8 +135,10 @@ text_sensor:
                     float actual = atof(msg.substr(pos1+1).c_str());
                     id(spa_target_temp) = target;
                     id(spa_actual_temp) = actual;
-                    id(target_temp_sensor).publish_state(target);
-                    id(actual_temp_sensor).publish_state(actual);
+                    // Update climate entity
+                    auto *climate = (SpaClimate*)id(spa_climate);
+                    climate->set_current_temperature(actual);
+                    climate->set_target_temperature(target);
                   }
                 }
 
@@ -209,31 +212,32 @@ select:
           sprintf(cmd, "CMD:PROG:%d\n", prog);
           id(arduino_uart).write_str(cmd);
 
-# Temperature sensors
+# Climate entity for spa control
+climate:
+  - platform: custom
+    lambda: |-
+      auto spa = new SpaClimate(id(arduino_uart));
+      App.register_component(spa);
+      return {spa};
+    climates:
+      - id: spa_climate
+        name: "Spa"
+
+# Internal sensors for state tracking (used by climate)
 sensor:
   - platform: template
     id: target_temp_sensor
-    name: "Spa Target Temperature"
-    icon: "mdi:thermometer"
-    unit_of_measurement: "°C"
-    accuracy_decimals: 1
-    device_class: temperature
+    internal: true
 
   - platform: template
     id: actual_temp_sensor
-    name: "Spa Actual Temperature"
-    icon: "mdi:thermometer-water"
-    unit_of_measurement: "°C"
-    accuracy_decimals: 1
-    device_class: temperature
+    internal: true
 
 # Binary sensors for status
 binary_sensor:
   - platform: template
     id: heating_sensor
-    name: "Spa Heating"
-    icon: "mdi:fire"
-    device_class: heat
+    internal: true
 
   - platform: template
     id: standby_sensor

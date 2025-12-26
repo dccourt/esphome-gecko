@@ -100,6 +100,15 @@ uint8_t progCmd[18] = {
     0x00, 0x00  // [16]=PROG_ID, [17]=CHECKSUM
 };
 
+// Temperature set command (20 bytes) - TODO: Verify exact format from spa captures
+// Based on on/off command pattern, function 0x50 is assumed for temperature
+uint8_t tempCmd[20] = {
+    0x17, 0x0A, 0x00, 0x00, 0x00, 0x17, 0x09, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x06, 0x46, 0x52, 0x51,
+    0x01, 0x50, 0x00, 0x00  // [18]=TEMP_RAW_HIGH, [19] will be checksum
+    // Note: May need adjustment after capturing actual command
+};
+
 uint8_t calcChecksum(uint8_t* data, uint8_t len) {
     uint8_t xorVal = 0;
     for (uint8_t i = 0; i < len - 1; i++) {
@@ -171,6 +180,23 @@ void sendProgramCommand(uint8_t prog) {
     sendI2CMessage(progCmd, 18);
     Serial.print("STATUS:CMD_SENT:PROG:");
     Serial.println(prog);
+}
+
+void sendTemperatureCommand(float tempC) {
+    // Convert temperature to raw value (multiply by 18)
+    // Valid range typically 26-40°C
+    if (tempC < 26.0 || tempC > 40.0) return;
+
+    uint16_t tempRaw = (uint16_t)(tempC * 18.0);
+    tempCmd[18] = tempRaw;  // Temperature as single byte (range ~468-720, but spa may use lower byte only)
+    tempCmd[19] = calcChecksum(tempCmd, 20);
+    sendI2CMessage(tempCmd, 20);
+
+    // Update local state
+    targetTemp = tempC;
+
+    Serial.print("STATUS:CMD_SENT:TEMP:");
+    Serial.println(tempC, 1);
 }
 
 bool isGoMessage() {
@@ -266,6 +292,9 @@ void processUartCommand(const char* cmd) {
     } else if (strncmp(cmd, "CMD:PROG:", 9) == 0) {
         uint8_t prog = cmd[9] - '0';
         sendProgramCommand(prog);
+    } else if (strncmp(cmd, "CMD:SETTEMP:", 12) == 0) {
+        float temp = atof(cmd + 12);
+        sendTemperatureCommand(temp);
     } else if (strncmp(cmd, "CMD:STATUS", 10) == 0) {
         Serial.print("STATUS:LIGHT:");
         Serial.println(lightState ? "ON" : "OFF");

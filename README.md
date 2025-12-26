@@ -8,6 +8,7 @@ Home Assistant integration for Gecko spa systems using ESP32-S2 and Arduino Nano
 2. [Software Build & Upload](#software-build--upload)
 3. [UART Communication Protocol](#uart-communication-protocol)
 4. [I2C Protocol](#i2c-protocol)
+5. [Credits](#credits)
 
 ---
 
@@ -54,7 +55,7 @@ Output voltage: ~2.7V (within ESP32 3.3V logic threshold)
 **Important:** Do NOT connect Arduino VCC to spa - power Arduino separately via USB or external supply.
 
 ### Wiring Diagram
-
+Credits to agittins for the pictures
 ![](./pictures/spa_pinouts.png)
 ![](./pictures/spa_power.png)
 ![](./pictures/adafruit_esp32s2.png)
