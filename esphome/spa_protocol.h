@@ -48,6 +48,13 @@ class SpaProtocol : public Component, public UARTDevice {
       if (connected_sensor_) connected_sensor_->publish_state(false);
       ESP_LOGW("spa", "Spa connection lost (timeout)");
     }
+
+    // Send GO keep-alive every 30 seconds
+    if (millis() - last_go_send_time_ > 30000) {
+      last_go_send_time_ = millis();
+      send_i2c_message(GO_MESSAGE, 15);
+      ESP_LOGD("spa", "Sent GO keep-alive");
+    }
   }
 
   // Command methods (called from switches/climate)
@@ -144,6 +151,7 @@ class SpaProtocol : public Component, public UARTDevice {
   float target_temp_{0};
   float actual_temp_{0};
   unsigned long last_i2c_time_{0};
+  unsigned long last_go_send_time_{0};
 
   // UART buffer
   char uart_buffer_[512];
@@ -196,6 +204,12 @@ class SpaProtocol : public Component, public UARTDevice {
   };
 
   static constexpr uint8_t GO_RESP5[2] = { 0x17, 0x0A };
+
+  // GO keep-alive message (sent periodically to maintain connection)
+  static constexpr uint8_t GO_MESSAGE[15] = {
+    0x17, 0x00, 0x00, 0x00, 0x00, 0x17, 0x09, 0x00,
+    0x00, 0x00, 0x00, 0x00, 0x01, 0x47, 0x4F  // "GO"
+  };
 
   uint8_t calc_checksum(const uint8_t* data, uint8_t len) {
     uint8_t xor_val = 0;
@@ -411,6 +425,7 @@ constexpr uint8_t SpaProtocol::GO_RESP2[78];
 constexpr uint8_t SpaProtocol::GO_RESP3[78];
 constexpr uint8_t SpaProtocol::GO_RESP4[23];
 constexpr uint8_t SpaProtocol::GO_RESP5[2];
+constexpr uint8_t SpaProtocol::GO_MESSAGE[15];
 
 // Simple climate wrapper that uses SpaProtocol
 class SpaClimate : public Component, public Climate {
@@ -422,6 +437,7 @@ class SpaClimate : public Component, public Climate {
     this->action = CLIMATE_ACTION_IDLE;
     this->target_temperature = 37.0;
     this->current_temperature = NAN;
+    this->publish_state();  // Publish initial state to Home Assistant
   }
 
   ClimateTraits traits() override {
