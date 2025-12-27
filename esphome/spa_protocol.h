@@ -282,20 +282,33 @@ class SpaProtocol : public Component, public UARTDevice {
       return;
     }
 
-    // Status message (78 bytes)
-    if (len == 78 && data[17] == 0x00) {
-      uint8_t sub = data[18];
-      if (sub == 0x08 || sub == 0x09 || sub == 0x0A) {
+    // Status message (78 bytes) - only parse type=0x00 messages (actual status)
+    // type=0x01 messages have different layout (config data)
+    if (len == 78) {
+      uint8_t msg_type = data[17];
+      uint8_t msg_sub = data[18];
+      ESP_LOGI("spa", "78-byte msg: type=%02X sub=%02X", msg_type, msg_sub);
+
+      if (msg_type == 0x00) {
+        // Log key bytes for debugging
+        ESP_LOGD("spa", "Status bytes: [19]=%02X [21]=%02X [22]=%02X [23]=%02X [37]=%02X [38]=%02X [39]=%02X [40]=%02X [65]=%02X [69]=%02X",
+                 data[19], data[21], data[22], data[23], data[37], data[38], data[39], data[40], data[65], data[69]);
         parse_status_message(data);
       }
+      return;
+    }
+
+    // Log unhandled messages
+    if (len > 2) {
+      ESP_LOGD("spa", "Unhandled msg: len=%d first_bytes=%02X%02X%02X", len, data[0], data[1], data[2]);
     }
   }
 
   void parse_status_message(const uint8_t* data) {
     bool new_standby = (data[19] == 0x03);
     bool new_pump = (data[21] == 0x02) || (data[23] == 0x01);
-    bool new_heating = (data[22] != 0x00) || (data[42] & 0x04);
-    bool new_circ = (data[65] == 0x14);
+    bool new_circ = (data[22] & 0x80);  // Bit 7 of byte 22 = circulation
+    bool new_heating = (data[22] & 0x20) || (data[42] & 0x04);  // Different bit for heating
     bool new_light = (data[69] == 0x01);
 
     // Temperature
