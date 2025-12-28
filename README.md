@@ -400,18 +400,6 @@ TEMP_RAW = (temperature_celsius × 18) - 512
 17 0A 00 00 00 17 09 00 00 00 00 00 07 46 52 51 00 01 02 9A [CHK]
 ```
 
-#### GO Response Sequence
-
-When the spa sends a GO message, the controller must respond with:
-
-1. **Response 1** (78 bytes) - Configuration type 0x00/0x05
-2. **Response 2** (78 bytes) - Configuration type 0x3B/0x02
-3. **Response 3** (78 bytes) - Configuration type 0x76/0x3C
-4. **Response 4** (23 bytes) - Type 0xB1/0x00
-5. **Response 5** (2 bytes) - ACK `17 0A` × 5 times
-
-Each response should be sent with a 5ms delay between messages.
-
 ---
 
 ## Troubleshooting
