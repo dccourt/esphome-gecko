@@ -25,7 +25,8 @@ Home Assistant integration for Gecko spa systems using ESP32-S2 and Arduino Nano
 2. [Software Build & Upload](#software-build--upload)
 3. [UART Proxy Protocol](#uart-proxy-protocol)
 4. [I2C Protocol](#i2c-protocol)
-5. [Credits](#credits)
+5. [Buy me a coffee](#buy-me-a-coffee) 
+6. [Credits](#credits)
 
 ---
 
@@ -438,6 +439,8 @@ Each response should be sent with a 5ms delay between messages.
 ## Credits
 Credit to https://github.com/agittins for the pictures and initial research.
 
+## Buy me a coffee
+[https://www.buymeacoffee.com/zteifel]() 
 ## License
 
 MIT License - See LICENSE file for details.
