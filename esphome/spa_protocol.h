@@ -1,5 +1,6 @@
 #pragma once
 #include "esphome.h"
+#include <time.h>
 
 // Spa I2C Protocol Handler
 // All protocol logic runs on ESP32, Arduino is just an I2C proxy
@@ -22,6 +23,12 @@ class SpaProtocol : public Component, public UARTDevice {
     bs->publish_state(connected_);  // Publish initial state (false)
   }
   void set_climate(climate::Climate *cl) { climate_ = cl; }
+
+  // Notification sensor setters
+  void set_rinse_filter_sensor(sensor::Sensor *s) { rinse_filter_sensor_ = s; }
+  void set_clean_filter_sensor(sensor::Sensor *s) { clean_filter_sensor_ = s; }
+  void set_change_water_sensor(sensor::Sensor *s) { change_water_sensor_ = s; }
+  void set_spa_checkup_sensor(sensor::Sensor *s) { spa_checkup_sensor_ = s; }
 
   void setup() override {
     ESP_LOGI("spa", "SpaProtocol starting");
@@ -138,6 +145,12 @@ class SpaProtocol : public Component, public UARTDevice {
   binary_sensor::BinarySensor *standby_sensor_{nullptr};
   binary_sensor::BinarySensor *connected_sensor_{nullptr};
   climate::Climate *climate_{nullptr};
+
+  // Notification sensors
+  sensor::Sensor *rinse_filter_sensor_{nullptr};
+  sensor::Sensor *clean_filter_sensor_{nullptr};
+  sensor::Sensor *change_water_sensor_{nullptr};
+  sensor::Sensor *spa_checkup_sensor_{nullptr};
 
   // State
   bool light_state_{false};
@@ -326,6 +339,14 @@ class SpaProtocol : public Component, public UARTDevice {
       return;
     }
 
+    // Notification message (77 bytes) - maintenance reminders
+    // byte[6]=0x0B, byte[17]=0x19, byte[18]=0x0C
+    if (len == 77 && data[6] == 0x0B && data[17] == 0x19 && data[18] == 0x0C) {
+      ESP_LOGI("spa", "Notification message received");
+      parse_notification_message(data);
+      return;
+    }
+
     // Log unhandled messages
     if (len > 2) {
       ESP_LOGD("spa", "Unhandled msg: len=%d first_bytes=%02X%02X%02X", len, data[0], data[1], data[2]);
@@ -401,6 +422,73 @@ class SpaProtocol : public Component, public UARTDevice {
         climate_->publish_state();
       }
     }
+  }
+
+  void parse_notification_message(const uint8_t* data) {
+    // Notification entries start at byte 16, each entry is 6 bytes:
+    // [ID] [DD] [MM] [YY] [INTERVAL_LO] [INTERVAL_HI]
+    // Entry 1 (byte 16): Rinse Filter (30 days)
+    // Entry 2 (byte 22): Clean Filter (60 days)
+    // Entry 3 (byte 28): Change Water (90 days)
+    // Entry 4 (byte 34): Spa Checkup (750 days)
+
+    // Get current time (use global namespace to avoid conflict with esphome::time)
+    time_t now;
+    ::time(&now);
+    struct tm* timeinfo = ::localtime(&now);
+
+    // Calculate current day number (days since year 2000)
+    int current_year = timeinfo->tm_year + 1900;
+    int current_month = timeinfo->tm_mon + 1;
+    int current_day = timeinfo->tm_mday;
+    int today = days_since_2000(current_year, current_month, current_day);
+
+    // Parse each notification entry
+    for (int i = 0; i < 4; i++) {
+      int offset = 16 + (i * 6);
+      uint8_t id = data[offset];
+      uint8_t reset_day = data[offset + 1];
+      uint8_t reset_month = data[offset + 2];
+      uint8_t reset_year = data[offset + 3] + 2000;
+      uint16_t interval = data[offset + 4] | (data[offset + 5] << 8);
+
+      // Calculate days until due
+      int reset_date = days_since_2000(reset_year, reset_month, reset_day);
+      int due_date = reset_date + interval;
+      int days_remaining = due_date - today;
+
+      ESP_LOGI("spa", "Notification %d: reset=%02d/%02d/%04d interval=%d days_remaining=%d",
+               id, reset_day, reset_month, reset_year, interval, days_remaining);
+
+      // Publish to appropriate sensor
+      sensor::Sensor* sensor = nullptr;
+      switch (id) {
+        case 1: sensor = rinse_filter_sensor_; break;
+        case 2: sensor = clean_filter_sensor_; break;
+        case 3: sensor = change_water_sensor_; break;
+        case 4: sensor = spa_checkup_sensor_; break;
+      }
+      if (sensor) {
+        sensor->publish_state(days_remaining);
+      }
+    }
+  }
+
+  int days_since_2000(int year, int month, int day) {
+    // Simple day count calculation
+    int days = 0;
+    for (int y = 2000; y < year; y++) {
+      days += (y % 4 == 0 && (y % 100 != 0 || y % 400 == 0)) ? 366 : 365;
+    }
+    static const int month_days[] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+    for (int m = 1; m < month; m++) {
+      days += month_days[m];
+      if (m == 2 && (year % 4 == 0 && (year % 100 != 0 || year % 400 == 0))) {
+        days += 1;  // Leap year February
+      }
+    }
+    days += day;
+    return days;
   }
 
   void send_go_response() {

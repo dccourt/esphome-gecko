@@ -28,6 +28,12 @@ ota:
   platform: esphome
   password: !secret ota_password
 
+# Time component for notification date calculations
+time:
+  - platform: sntp
+    id: sntp_time
+    timezone: Europe/Stockholm
+
 # UART connection to Arduino I2C Proxy
 uart:
   id: arduino_uart
@@ -53,6 +59,35 @@ sensor:
       App.register_component(proto);
       return {};
     sensors: []
+
+  # Notification sensors (days remaining until maintenance due)
+  - platform: template
+    id: rinse_filter_sensor
+    name: "Spa Rinse Filter"
+    icon: "mdi:air-filter"
+    unit_of_measurement: "days"
+    accuracy_decimals: 0
+
+  - platform: template
+    id: clean_filter_sensor
+    name: "Spa Clean Filter"
+    icon: "mdi:vacuum"
+    unit_of_measurement: "days"
+    accuracy_decimals: 0
+
+  - platform: template
+    id: change_water_sensor
+    name: "Spa Change Water"
+    icon: "mdi:water-sync"
+    unit_of_measurement: "days"
+    accuracy_decimals: 0
+
+  - platform: template
+    id: spa_checkup_sensor
+    name: "Spa Checkup"
+    icon: "mdi:wrench-clock"
+    unit_of_measurement: "days"
+    accuracy_decimals: 0
 
 # Switches for controlling spa
 switch:
@@ -178,6 +213,10 @@ interval:
               proto->set_program_select(id(program_select));
               proto->set_standby_sensor(id(standby_sensor));
               proto->set_connected_sensor(id(connected_sensor));
+              proto->set_rinse_filter_sensor(id(rinse_filter_sensor));
+              proto->set_clean_filter_sensor(id(clean_filter_sensor));
+              proto->set_change_water_sensor(id(change_water_sensor));
+              proto->set_spa_checkup_sensor(id(spa_checkup_sensor));
               initialized = true;
               ESP_LOGI("spa", "Entity pointers registered with SpaProtocol");
             }
