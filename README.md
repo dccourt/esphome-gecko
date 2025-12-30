@@ -21,12 +21,155 @@ Home Assistant integration for Gecko spa systems using ESP32-S2 and Arduino Nano
 
 ## Table of Contents
 
-1. [Hardware Build](#hardware-build)
-2. [Software Build & Upload](#software-build--upload)
+1. [Installation](#installation)
+2. [Hardware Build](#hardware-build)
 3. [UART Proxy Protocol](#uart-proxy-protocol)
 4. [I2C Protocol](#i2c-protocol)
-5. [Buy me a coffee](#buy-me-a-coffee) 
+5. [Buy me a coffee](#buy-me-a-coffee)
 6. [Credits](#credits)
+
+---
+
+## Installation
+
+### Quick Start
+
+1. **Set up hardware** - See [Hardware Build](#hardware-build) section below
+
+2. **Flash the Arduino Nano** - Install PlatformIO and upload the I2C proxy firmware:
+   ```bash
+   pip install platformio
+   cd arduino
+   pio run -t upload
+   ```
+   > **Note:** The `platformio.ini` includes `-DTWI_BUFFER_LENGTH=128 -DBUFFER_LENGTH=128` to handle 78-byte I2C messages. This is critical - the default Arduino Wire buffer is only 32 bytes.
+
+3. **Create a secrets.yaml file** with your credentials:
+   ```yaml
+   wifi_ssid: "YourWiFiName"
+   wifi_password: "YourWiFiPassword"
+   api_encryption_key: "generate-with-openssl-rand-base64-32"
+   ota_password: "your-ota-password"
+   ```
+   Generate the API key with: `openssl rand -base64 32`
+
+4. **Create your ESPHome configuration** - This component can be installed directly from GitHub:
+
+```yaml
+substitutions:
+  device_name: spa-controller
+
+esphome:
+  name: ${device_name}
+  friendly_name: Spa Controller
+
+esp32:
+  board: featheresp32-s2
+  framework:
+    type: arduino
+
+# Import Gecko Spa component from GitHub
+external_components:
+  - source: github://zteifel/esphome-gecko
+    components: [gecko_spa]
+
+logger:
+  level: DEBUG
+  baud_rate: 0
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  platform: esphome
+  password: !secret ota_password
+
+# UART connection to Arduino I2C Proxy
+uart:
+  id: arduino_uart
+  tx_pin: GPIO5
+  rx_pin: GPIO16
+  baud_rate: 115200
+  rx_buffer_size: 512
+
+# Gecko Spa component
+gecko_spa:
+  id: spa
+  uart_id: arduino_uart
+
+# Climate control
+climate:
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    name: "Spa"
+
+# Switches
+switch:
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    type: light
+    name: "Spa Light"
+    icon: "mdi:lightbulb"
+
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    type: pump
+    name: "Spa Pump"
+    icon: "mdi:pump"
+
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    type: circulation
+    name: "Spa Circulation"
+    icon: "mdi:rotate-3d-variant"
+
+# Program selector
+select:
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    name: "Spa Program"
+    icon: "mdi:format-list-bulleted"
+
+# Status sensors
+binary_sensor:
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    type: standby
+    name: "Spa Standby"
+    icon: "mdi:power-standby"
+
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    type: connected
+    name: "Spa Connected"
+    device_class: connectivity
+```
+
+5. **Flash and add to Home Assistant**:
+   ```bash
+   esphome run your-config.yaml
+   ```
+
+6. The device will appear in Home Assistant under **Settings → Devices & Services → ESPHome**
+
+### Home Assistant Entities
+
+After installation, you'll have these entities:
+
+| Entity | Type | Description |
+|--------|------|-------------|
+| Spa | Climate | Temperature control with current/target display |
+| Spa Light | Switch | Control spa light |
+| Spa Pump | Switch | Control main pump |
+| Spa Circulation | Switch | Control circulation pump |
+| Spa Program | Select | Choose program (Away, Standard, Energy, Super Energy, Weekend) |
+| Spa Standby | Binary Sensor | Standby mode status |
+| Spa Connected | Binary Sensor | Connection status to spa |
 
 ---
 
@@ -109,76 +252,6 @@ Credits to agittins for the pictures
     │                                                 │
     └─────────────────────────────────────────────────┘
 ```
-
----
-
-## Software Build & Upload
-
-### Requirements
-
-- Python 3.8+
-- PlatformIO Core
-- ESPHome
-
-### Installation
-
-```bash
-# Create Python virtual environment
-python3 -m venv venv
-source venv/bin/activate
-
-# Install ESPHome
-pip install esphome
-
-# Install PlatformIO (for Arduino)
-pip install platformio
-```
-
-### Arduino Nano Clone Firmware
-
-1. Navigate to Arduino directory:
-   ```bash
-   cd arduino
-   ```
-
-2. Build and upload:
-   ```bash
-   pio run -t upload
-   ```
-
-**Critical Build Flag:** The `platformio.ini` includes `-DTWI_BUFFER_LENGTH=128 -DBUFFER_LENGTH=128` to handle 78-byte I2C messages from the spa. Default Arduino Wire buffer is only 32 bytes.
-
-### ESPHome Firmware
-
-1. Navigate to ESPHome directory:
-   ```bash
-   cd esphome
-   ```
-
-2. Create secrets file:
-   ```bash
-   cp secrets.yaml.template secrets.yaml
-   # Edit secrets.yaml with your values
-   ```
-
-3. Generate API encryption key:
-   ```bash
-   openssl rand -base64 32
-   ```
-
-4. Build and upload (first time via USB):
-   ```bash
-   esphome run spa-controller.yaml
-   ```
-
-5. Subsequent updates via OTA:
-   ```bash
-   esphome run spa-controller.yaml --device <IP_ADDRESS>
-   ```
-
-### Home Assistant Integration
-
-After uploading, the device will appear in Home Assistant under **Settings → Devices & Services → ESPHome**. Add it using the API encryption key from your `secrets.yaml`.
 
 ---
 
