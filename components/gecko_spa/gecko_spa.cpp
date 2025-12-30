@@ -227,9 +227,14 @@ void GeckoSpa::process_i2c_message(const uint8_t *data, uint8_t len) {
     return;
   }
 
-  // Log unhandled messages
+  // Log unhandled messages with full hex dump
   if (len > 2) {
-    ESP_LOGD(TAG, "Unhandled msg: len=%d first_bytes=%02X%02X%02X", len, data[0], data[1], data[2]);
+    char hex_str[256];
+    int pos = 0;
+    for (int i = 0; i < len && pos < 250; i++) {
+      pos += sprintf(hex_str + pos, "%02X", data[i]);
+    }
+    ESP_LOGI(TAG, "Unhandled msg len=%d: %s", len, hex_str);
   }
 }
 
