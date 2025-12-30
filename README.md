@@ -44,7 +44,16 @@ Home Assistant integration for Gecko spa systems using ESP32-S2 and Arduino Nano
    ```
    > **Note:** The `platformio.ini` includes `-DTWI_BUFFER_LENGTH=128 -DBUFFER_LENGTH=128` to handle 78-byte I2C messages. This is critical - the default Arduino Wire buffer is only 32 bytes.
 
-3. **Create your ESPHome configuration** - This component can be installed directly from GitHub:
+3. **Create a secrets.yaml file** with your credentials:
+   ```yaml
+   wifi_ssid: "YourWiFiName"
+   wifi_password: "YourWiFiPassword"
+   api_encryption_key: "generate-with-openssl-rand-base64-32"
+   ota_password: "your-ota-password"
+   ```
+   Generate the API key with: `openssl rand -base64 32`
+
+4. **Create your ESPHome configuration** - This component can be installed directly from GitHub:
 
 ```yaml
 substitutions:
@@ -141,12 +150,12 @@ binary_sensor:
     device_class: connectivity
 ```
 
-4. **Flash and add to Home Assistant**:
+5. **Flash and add to Home Assistant**:
    ```bash
    esphome run your-config.yaml
    ```
 
-5. The device will appear in Home Assistant under **Settings → Devices & Services → ESPHome**
+6. The device will appear in Home Assistant under **Settings → Devices & Services → ESPHome**
 
 ### Home Assistant Entities
 
