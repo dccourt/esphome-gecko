@@ -1,5 +1,6 @@
 #include "gecko_spa.h"
 #include "esphome/core/log.h"
+#include <ctime>
 
 namespace esphome {
 namespace gecko_spa {
@@ -185,6 +186,13 @@ void GeckoSpa::process_i2c_message(const uint8_t *data, uint8_t len) {
     return;
   }
 
+  // Notification message (77 bytes with byte[6]=0x0B)
+  if (len == 77 && data[6] == 0x0B) {
+    ESP_LOGD(TAG, "77-byte notification message");
+    parse_notification_message(data);
+    return;
+  }
+
   // Program status (18 bytes)
   if (len == 18) {
     ESP_LOGI(TAG, "18-byte msg: [1]=%02X [16]=%02X", data[1], data[16]);
@@ -318,6 +326,73 @@ void GeckoSpa::update_climate_state() {
   }
 
   climate_->publish_state();
+}
+
+int GeckoSpa::days_since_2000(int day, int month, int year) {
+  // Calculate days since Jan 1, 2000
+  struct tm tm = {};
+  tm.tm_year = 100 + year;  // years since 1900, so 2000 = 100
+  tm.tm_mon = month - 1;    // 0-based month
+  tm.tm_mday = day;
+  time_t target = mktime(&tm);
+
+  struct tm epoch = {};
+  epoch.tm_year = 100;  // 2000
+  epoch.tm_mon = 0;     // January
+  epoch.tm_mday = 1;
+  time_t base = mktime(&epoch);
+
+  return (int)((target - base) / 86400);
+}
+
+void GeckoSpa::parse_notification_message(const uint8_t *data) {
+  // Get current date
+  time_t now;
+  ::time(&now);
+  struct tm *timeinfo = ::localtime(&now);
+  int today = days_since_2000(timeinfo->tm_mday, timeinfo->tm_mon + 1, timeinfo->tm_year - 100);
+
+  // Notification entries start at byte 17, each entry is 6 bytes:
+  // [ID] [DD] [MM] [YY] [INTERVAL_LO] [INTERVAL_HI]
+  // ID: 0x01=Rinse Filter, 0x02=Clean Filter, 0x03=Change Water, 0x04=Spa Checkup
+  for (int i = 0; i < 4; i++) {
+    int offset = 17 + (i * 6);
+    uint8_t id = data[offset];
+    uint8_t day = data[offset + 1];
+    uint8_t month = data[offset + 2];
+    uint8_t year = data[offset + 3];
+    uint16_t interval = data[offset + 4] | (data[offset + 5] << 8);
+
+    if (id == 0 || interval == 0)
+      continue;
+
+    int reset_day = days_since_2000(day, month, year);
+    int due_day = reset_day + interval;
+    int days_remaining = due_day - today;
+
+    ESP_LOGI(TAG, "Notification %d: reset=%02d/%02d/%02d interval=%d days_remaining=%d",
+             id, day, month, year, interval, days_remaining);
+
+    sensor::Sensor *sensor = nullptr;
+    switch (id) {
+      case 0x01:
+        sensor = rinse_filter_sensor_;
+        break;
+      case 0x02:
+        sensor = clean_filter_sensor_;
+        break;
+      case 0x03:
+        sensor = change_water_sensor_;
+        break;
+      case 0x04:
+        sensor = spa_checkup_sensor_;
+        break;
+    }
+
+    if (sensor) {
+      sensor->publish_state((float)days_remaining);
+    }
+  }
 }
 
 // GeckoSpaClimate implementation

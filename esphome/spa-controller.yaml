@@ -32,6 +32,12 @@ ota:
   platform: esphome
   password: !secret ota_password
 
+# Time component for notification date calculations
+time:
+  - platform: sntp
+    id: sntp_time
+    timezone: Europe/Stockholm
+
 # UART connection to Arduino I2C Proxy
 uart:
   id: arduino_uart
@@ -92,6 +98,32 @@ binary_sensor:
     name: "Spa Connected"
     icon: "mdi:connection"
     device_class: connectivity
+
+# Notification sensors (days remaining)
+sensor:
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    type: rinse_filter
+    name: "Spa Rinse Filter"
+    icon: "mdi:air-filter"
+
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    type: clean_filter
+    name: "Spa Clean Filter"
+    icon: "mdi:vacuum"
+
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    type: change_water
+    name: "Spa Change Water"
+    icon: "mdi:water-sync"
+
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    type: spa_checkup
+    name: "Spa Checkup"
+    icon: "mdi:wrench-clock"
 
 # Button to manually request status
 button:

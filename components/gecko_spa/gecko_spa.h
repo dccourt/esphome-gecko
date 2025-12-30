@@ -7,6 +7,7 @@
 #include "esphome/components/switch/switch.h"
 #include "esphome/components/select/select.h"
 #include "esphome/components/binary_sensor/binary_sensor.h"
+#include "esphome/components/sensor/sensor.h"
 
 namespace esphome {
 namespace gecko_spa {
@@ -33,6 +34,10 @@ class GeckoSpa : public Component, public uart::UARTDevice {
     bs->publish_state(connected_);
   }
   void set_climate(climate::Climate *cl) { climate_ = cl; }
+  void set_rinse_filter_sensor(sensor::Sensor *s) { rinse_filter_sensor_ = s; }
+  void set_clean_filter_sensor(sensor::Sensor *s) { clean_filter_sensor_ = s; }
+  void set_change_water_sensor(sensor::Sensor *s) { change_water_sensor_ = s; }
+  void set_spa_checkup_sensor(sensor::Sensor *s) { spa_checkup_sensor_ = s; }
 
   // Command methods
   void send_light_command(bool on);
@@ -59,6 +64,10 @@ class GeckoSpa : public Component, public uart::UARTDevice {
   binary_sensor::BinarySensor *standby_sensor_{nullptr};
   binary_sensor::BinarySensor *connected_sensor_{nullptr};
   climate::Climate *climate_{nullptr};
+  sensor::Sensor *rinse_filter_sensor_{nullptr};
+  sensor::Sensor *clean_filter_sensor_{nullptr};
+  sensor::Sensor *change_water_sensor_{nullptr};
+  sensor::Sensor *spa_checkup_sensor_{nullptr};
 
   // State
   bool light_state_{false};
@@ -87,6 +96,8 @@ class GeckoSpa : public Component, public uart::UARTDevice {
   void process_proxy_message(const char *msg);
   void process_i2c_message(const uint8_t *data, uint8_t len);
   void parse_status_message(const uint8_t *data);
+  void parse_notification_message(const uint8_t *data);
+  int days_since_2000(int day, int month, int year);
   void update_climate_state();
 };
 
