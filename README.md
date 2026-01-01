@@ -455,6 +455,26 @@ Where XX = continuation flag (byte 9), YY ZZ = length/type info
 
 **Example:** Raw temp bytes `02 9A` = 0x029A = 666 / 18.0 = **37.0°C**
 
+#### Configuration Message (Multi-Part, 405 bytes concatenated)
+
+Periodic configuration/settings dump sent by the spa, typically after handshake.
+
+**Multi-Part Message Structure:**
+
+Similar to status messages, this is sent as multiple I2C transmissions with 16-byte headers stripped and payloads concatenated to form a 405-byte message.
+
+**Known Byte Positions (PARTIALLY DECODED):**
+
+| Byte | Description | Values |
+|------|-------------|--------|
+| 3-4 | Target temperature (raw) | Big-endian, divide by 18.0 for °C |
+
+**Example:** Bytes 3-4 = `02 9A` = 0x029A = 666 / 18.0 = **37.0°C**
+
+**Note:** This message likely contains program schedules, filter cycle settings, notification intervals, and other configuration data. Further reverse engineering is needed to decode additional fields.
+
+---
+
 #### Program Status Message (18 bytes)
 
 Indicates current program selection.

@@ -270,17 +270,12 @@ void GeckoSpa::process_i2c_message(const uint8_t *data, uint8_t len) {
     }
 
     // Last part received - log complete message in FULL-RX format
-    char hex_str[512];
+    char hex_str[1024];  // Large enough for 405 bytes × 2 = 810 chars + null
     int pos = 0;
-    int log_len = (msg_buffer_len_ > 200) ? 200 : msg_buffer_len_;
-    for (int i = 0; i < log_len && pos < 500; i++) {
+    for (int i = 0; i < msg_buffer_len_; i++) {
       pos += sprintf(hex_str + pos, "%02X", msg_buffer_[i]);
     }
-    if (msg_buffer_len_ > 200) {
-      ESP_LOGI(TAG, "FULL-RX:%d:%s...", msg_buffer_len_, hex_str);
-    } else {
-      ESP_LOGI(TAG, "FULL-RX:%d:%s", msg_buffer_len_, hex_str);
-    }
+    ESP_LOGI(TAG, "FULL-RX:%d:%s", msg_buffer_len_, hex_str);
 
     // Check if this is a status message (162 bytes after header stripping from all parts)
     // (78-16) + (78-16) + (54-16) = 62 + 62 + 38 = 162 bytes
