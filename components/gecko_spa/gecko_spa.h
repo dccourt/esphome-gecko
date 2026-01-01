@@ -8,6 +8,7 @@
 #include "esphome/components/select/select.h"
 #include "esphome/components/binary_sensor/binary_sensor.h"
 #include "esphome/components/sensor/sensor.h"
+#include "esphome/components/text_sensor/text_sensor.h"
 
 namespace esphome {
 namespace gecko_spa {
@@ -38,6 +39,7 @@ class GeckoSpa : public Component, public uart::UARTDevice {
   void set_clean_filter_sensor(sensor::Sensor *s) { clean_filter_sensor_ = s; }
   void set_change_water_sensor(sensor::Sensor *s) { change_water_sensor_ = s; }
   void set_spa_checkup_sensor(sensor::Sensor *s) { spa_checkup_sensor_ = s; }
+  void set_spa_time_sensor(text_sensor::TextSensor *s) { spa_time_sensor_ = s; }
 
   // Command methods
   void send_light_command(bool on);
@@ -68,6 +70,7 @@ class GeckoSpa : public Component, public uart::UARTDevice {
   sensor::Sensor *clean_filter_sensor_{nullptr};
   sensor::Sensor *change_water_sensor_{nullptr};
   sensor::Sensor *spa_checkup_sensor_{nullptr};
+  text_sensor::TextSensor *spa_time_sensor_{nullptr};
 
   // State
   bool light_state_{false};
@@ -86,6 +89,10 @@ class GeckoSpa : public Component, public uart::UARTDevice {
   // UART buffer
   char uart_buffer_[512];
   uint16_t uart_pos_{0};
+
+  // Multi-part message buffer (byte[10]=0x01 means more coming, 0x00 means last)
+  uint8_t msg_buffer_[512];
+  uint16_t msg_buffer_len_{0};
 
   // GO keep-alive message
   static const uint8_t GO_MESSAGE[15];

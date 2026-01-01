@@ -42,7 +42,7 @@ Home Assistant integration for Gecko spa systems using ESP32-S2 and Arduino Nano
    cd arduino
    pio run -t upload
    ```
-   > **Note:** The `platformio.ini` includes `-DTWI_BUFFER_LENGTH=128 -DBUFFER_LENGTH=128` to handle 78-byte I2C messages. This is critical - the default Arduino Wire buffer is only 32 bytes.
+   > **Note:** The `platformio.ini` includes `-DTWI_BUFFER_LENGTH=128 -DBUFFER_LENGTH=128` to handle multi-part I2C messages (up to 78 bytes per part). This is critical - the default Arduino Wire buffer is only 32 bytes.
 
 3. **Create a secrets.yaml file** with your credentials:
    ```yaml
@@ -174,6 +174,14 @@ sensor:
     type: spa_checkup
     name: "Spa Checkup"
     icon: "mdi:wrench-clock"
+
+# Spa internal clock
+text_sensor:
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    type: spa_time
+    name: "Spa Time"
+    icon: "mdi:clock-outline"
 ```
 
 5. **Flash and add to Home Assistant**:
@@ -200,6 +208,7 @@ After installation, you'll have these entities:
 | Clean Filter | Sensor | Days until filter clean reminder |
 | Change Water | Sensor | Days until water change reminder |
 | Spa Checkup | Sensor | Days until spa checkup reminder |
+| Spa Time | Text Sensor | Spa's internal clock (DD/MM HH:MM:SS) |
 
 ---
 
@@ -390,41 +399,61 @@ After GO is sent, the spa responds with messages that must be acknowledged:
 3. **Spa sends another 33-byte config message**
 4. **Controller replies with ACK**
 5. **Spa sends 22-byte clock message** (byte[13] = 0x4B = 'K', contains date/time)
+   - Byte 15: Day (decimal)
+   - Byte 16: Month (decimal)
+   - Byte 17: Day of week (0=Sun)
+   - Byte 18: Hour (hex, 24h format)
+   - Byte 19: Minutes (hex)
+   - Byte 20: Seconds (hex)
+   - Byte 21: Checksum
 6. **Controller replies with ACK**
 7. **Spa sends 15-byte "LO" message**: bytes[13-14] = 0x4C 0x4F = "LO"
 8. **Handshake complete** - status messages now flow normally
 
 **Important:** Without proper handshake acknowledgment, commands may not receive immediate status responses.
 
-#### Status Message (78 bytes)
+#### Status Message (Multi-Part, 162 bytes concatenated)
 
-The spa sends status as 3 messages in sequence: two 78-byte messages and one 54-byte message.
-Only parse the first 78-byte message with sub=06 or sub=07 for status data.
+Status data is sent as a **multi-part message** split across 3 I2C transmissions.
 
-**Message Identification:**
-- Length: 78 bytes
-- Byte[6] = 0x0A (status message; 0x0B = config dump, ignore)
-- Byte[17] = 0x00 (data type)
-- Byte[18] = subtype: **0x06** (pump off) or **0x07** (pump on)
+**Multi-Part Message Structure:**
 
-**Important:** Only parse sub=06 and sub=07 messages. Other subtypes (e.g., sub=05) have different data layouts and will cause incorrect status readings.
+| Part | Raw Size | Header | Payload | Description |
+|------|----------|--------|---------|-------------|
+| 1 | 78 bytes | 16 bytes | 62 bytes | First status part |
+| 2 | 78 bytes | 16 bytes | 62 bytes | Second status part |
+| 3 | 54 bytes | 16 bytes | 38 bytes | Final status part |
+| **Total** | 210 bytes | 48 bytes | **162 bytes** | Concatenated payload |
 
-**Key Byte Positions (VERIFIED for sub=06/07):**
+**Continuation Flag (Byte 9 in raw message):**
+- `0x01` = More parts coming
+- `0x00` = Last part of message
+
+**Header (16 bytes, stripped from each part):**
+```
+17 09 00 00 00 17 0A 01 00 XX 00 00 YY ZZ 52 51
+```
+Where XX = continuation flag (byte 9), YY ZZ = length/type info
+
+**Message Identification (in concatenated 162-byte payload):**
+- Byte[1] = 0x00 indicates status data
+
+**Key Byte Positions (VERIFIED in 162-byte concatenated payload):**
 
 | Byte | Description | Values |
 |------|-------------|--------|
-| 6 | Message type | 0x0A = Status, 0x0B = Config dump (ignore) |
-| 17 | Data type | 0x00 = Status data |
-| 18 | Subtype | 0x06 = pump off, 0x07 = pump on |
-| 21 | Pump state | 0x02 = Pump ON |
-| 22 | Circulation/Heating | Bit 7 (0x80) = Circ ON, Bit 5 (0x20) = Heating |
-| 23 | Pump flag | 0x01 = Pump ON |
-| 37-38 | Target temp (raw) | Big-endian, divide by 18.0 for °C |
-| 39-40 | Actual temp (raw) | Big-endian, divide by 18.0 for °C |
-| 42 | Heating flag | Bit 2 (0x04) = Heating |
-| 67 | Light flag | 0x78 when light ON |
-| 69 | Light state | 0x01 = Light ON |
-| 77 | Checksum | XOR of bytes 0-76 |
+| 1 | Data type | 0x00 = Status data |
+| 3 | Standby | 0x03 = Standby ON |
+| 5 | Pump state | 0x02 = Pump ON |
+| 6 | Heat flags | Bit 7 (0x80) = Circ during heating, Bit 5 (0x20) = Heating |
+| 7 | Pump flag | 0x01 = Pump ON |
+| 21-22 | Target temp (raw) | Big-endian, divide by 18.0 for °C |
+| 23-24 | Actual temp (raw) | Big-endian, divide by 18.0 for °C |
+| 26 | Heating flag | Bit 2 (0x04) = Heating |
+| 53 | Light state | 0x01 = Light ON |
+| 112 | Circulation | 0x01 = Circulation ON (manual toggle) |
+
+**Example:** Raw temp bytes `02 9A` = 0x029A = 666 / 18.0 = **37.0°C**
 
 #### Program Status Message (18 bytes)
 

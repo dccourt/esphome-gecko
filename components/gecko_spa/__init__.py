@@ -4,7 +4,7 @@ from esphome.components import uart
 from esphome.const import CONF_ID
 
 DEPENDENCIES = ["uart"]
-AUTO_LOAD = ["climate", "switch", "select", "binary_sensor"]
+AUTO_LOAD = ["climate", "switch", "select", "binary_sensor", "text_sensor"]
 
 CONF_UART_ID = "uart_id"
 

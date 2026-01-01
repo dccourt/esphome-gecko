@@ -40,8 +40,8 @@ void GeckoSpa::loop() {
     ESP_LOGW(TAG, "Spa connection lost (timeout)");
   }
 
-  // Send GO keep-alive every 60 seconds (triggers handshake sequence)
-  if (millis() - last_go_send_time_ > 60000) {
+  // Send GO keep-alive every 23 seconds (triggers handshake sequence)
+  if (millis() - last_go_send_time_ > 23000) {
     last_go_send_time_ = millis();
     send_i2c_message(GO_MESSAGE, 15);
     ESP_LOGD(TAG, "Sent GO keep-alive");
@@ -199,9 +199,23 @@ void GeckoSpa::process_i2c_message(const uint8_t *data, uint8_t len) {
     return;
   }
 
-  // 22-byte clock message - send acknowledgment
-  if (len == 22) {
-    ESP_LOGD(TAG, "Received 22-byte clock message, sending ACK");
+  // 22-byte clock message - parse time and send acknowledgment
+  if (len == 22 && data[13] == 0x4B) {  // 0x4B = 'K'
+    // Time format: [15]=Day [16]=Month [17]=DayOfWeek [18]=Hour [19]=Min [20]=Sec
+    uint8_t day = data[15];
+    uint8_t month = data[16];
+    uint8_t hour = data[18];
+    uint8_t minute = data[19];
+    uint8_t second = data[20];
+
+    ESP_LOGD(TAG, "Spa clock: %02d/%02d %02d:%02d:%02d", day, month, hour, minute, second);
+
+    if (spa_time_sensor_) {
+      char time_str[20];
+      snprintf(time_str, sizeof(time_str), "%02d/%02d %02d:%02d:%02d", day, month, hour, minute, second);
+      spa_time_sensor_->publish_state(time_str);
+    }
+
     send_i2c_message(ACK_MESSAGE, 15);
     return;
   }
@@ -234,53 +248,85 @@ void GeckoSpa::process_i2c_message(const uint8_t *data, uint8_t len) {
     return;
   }
 
-  // Status message (78 bytes)
-  if (len == 78) {
-    if (data[6] != 0x0A) {
-      ESP_LOGD(TAG, "78-byte config msg (ignored): byte[6]=%02X", data[6]);
+  // Multi-part message handling using byte[9] as continuation flag
+  // byte[9] == 0x01: more parts coming, byte[9] == 0x00: last part
+  // Header is first 16 bytes (1709000000170A010001000040C75251), strip from subsequent parts
+  static const int HEADER_LEN = 16;
+
+  if (len >= 10) {
+    bool more_coming = (data[9] == 0x01);
+
+    // Add this part to buffer (strip header from all parts)
+    int payload_start = (len > HEADER_LEN) ? HEADER_LEN : 0;
+    int payload_len = len - payload_start;
+    if (msg_buffer_len_ + payload_len <= sizeof(msg_buffer_)) {
+      memcpy(msg_buffer_ + msg_buffer_len_, data + payload_start, payload_len);
+      msg_buffer_len_ += payload_len;
+    }
+
+    if (more_coming) {
+      ESP_LOGD(TAG, "Message part (%d bytes), more coming. Buffer now %d bytes", len, msg_buffer_len_);
       return;
     }
 
-    uint8_t msg_type = data[17];
-    uint8_t msg_sub = data[18];
-    ESP_LOGD(TAG, "78-byte status: type=%02X sub=%02X", msg_type, msg_sub);
-
-    // Parse sub=06 (pump off) or sub=07 (pump on) - both have same data layout
-    // Skip sub=05 and others which have different data structures
-    if (msg_type == 0x00 && (msg_sub == 0x06 || msg_sub == 0x07)) {
-      ESP_LOGD(TAG, "Status bytes: [21]=%02X [22]=%02X [23]=%02X [37]=%02X [38]=%02X [39]=%02X [40]=%02X [69]=%02X",
-               data[21], data[22], data[23], data[37], data[38], data[39], data[40], data[69]);
-      parse_status_message(data);
+    // Last part received - log complete message in FULL-RX format
+    char hex_str[512];
+    int pos = 0;
+    int log_len = (msg_buffer_len_ > 200) ? 200 : msg_buffer_len_;
+    for (int i = 0; i < log_len && pos < 500; i++) {
+      pos += sprintf(hex_str + pos, "%02X", msg_buffer_[i]);
     }
+    if (msg_buffer_len_ > 200) {
+      ESP_LOGI(TAG, "FULL-RX:%d:%s...", msg_buffer_len_, hex_str);
+    } else {
+      ESP_LOGI(TAG, "FULL-RX:%d:%s", msg_buffer_len_, hex_str);
+    }
+
+    // Check if this is a status message (162 bytes after header stripping from all parts)
+    // (78-16) + (78-16) + (54-16) = 62 + 62 + 38 = 162 bytes
+    // Original byte[17]=0x00 indicates status data, now byte[1] after header strip
+    if (msg_buffer_len_ == 162 && msg_buffer_[1] == 0x00) {
+      // Log key byte positions including circ at 110
+      ESP_LOGI(TAG, "Parsing: [3]=%02X [5]=%02X [21-24]=%02X%02X%02X%02X [53]=%02X [109-112]=%02X%02X%02X%02X",
+               msg_buffer_[3], msg_buffer_[5],
+               msg_buffer_[21], msg_buffer_[22], msg_buffer_[23], msg_buffer_[24], msg_buffer_[53],
+               msg_buffer_[109], msg_buffer_[110], msg_buffer_[111], msg_buffer_[112]);
+      parse_status_message(msg_buffer_);
+    }
+
+    // Reset buffer for next message
+    msg_buffer_len_ = 0;
     return;
   }
 
-  // Log unhandled messages with full hex dump
+  // Short messages (< 11 bytes) - log them
   if (len > 2) {
-    char hex_str[256];
+    char hex_str[64];
     int pos = 0;
-    for (int i = 0; i < len && pos < 250; i++) {
+    for (int i = 0; i < len && pos < 60; i++) {
       pos += sprintf(hex_str + pos, "%02X", data[i]);
     }
-    ESP_LOGI(TAG, "Unhandled msg len=%d: %s", len, hex_str);
+    ESP_LOGI(TAG, "Short msg (%d bytes): %s", len, hex_str);
   }
 }
 
 void GeckoSpa::parse_status_message(const uint8_t *data) {
-  bool new_standby = (data[19] == 0x03);
-  bool new_pump = (data[21] == 0x02) || (data[23] == 0x01);
-  bool new_circ = (data[22] & 0x80);
-  bool new_heating = (data[22] & 0x20) || (data[42] & 0x04);
-  bool new_light = (data[69] == 0x01);
+  // Byte positions in 162-byte concatenated message (headers stripped from all 3 parts)
+  // Circulation appears at byte 109/110 based on observed on/off sequence
+  bool new_standby = (data[3] == 0x03);
+  bool new_pump = (data[5] == 0x02) || (data[7] == 0x01);
+  bool new_circ = (data[112] == 0x01) || (data[6] & 0x80);  // Byte 112 for manual, byte 6 bit 7 for heating
+  bool new_heating = (data[6] & 0x20) || (data[26] & 0x04);
+  bool new_light = (data[53] == 0x01);
 
   // Temperature - only parse if temp data is present
   float new_target = target_temp_;
   float new_actual = actual_temp_;
-  bool temp_valid = (data[37] != 0 || data[38] != 0);
+  bool temp_valid = (data[21] != 0 || data[22] != 0);
   if (temp_valid) {
-    uint16_t target_raw = (data[37] << 8) | data[38];
+    uint16_t target_raw = (data[21] << 8) | data[22];
     new_target = target_raw / 18.0;
-    uint16_t actual_raw = (data[39] << 8) | data[40];
+    uint16_t actual_raw = (data[23] << 8) | data[24];
     new_actual = actual_raw / 18.0;
   }
 

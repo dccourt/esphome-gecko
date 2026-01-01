@@ -125,6 +125,14 @@ sensor:
     name: "Spa Checkup"
     icon: "mdi:wrench-clock"
 
+# Spa internal clock
+text_sensor:
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    type: spa_time
+    name: "Spa Time"
+    icon: "mdi:clock-outline"
+
 # Button to manually request status
 button:
   - platform: template
