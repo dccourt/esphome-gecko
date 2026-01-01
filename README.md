@@ -572,6 +572,13 @@ TEMP_RAW = (temperature_celsius × 18) - 512
 
 ---
 
+## TODO
+
+- Arduino reset button in home assistant using Digital pin on the esp32 wired to reset on arduino
+- Scheduling of economy intervals and filter cycles in programs (decoding of i2c protocol complete)
+- Cleanup notifications fix
+
+
 ## Troubleshooting
 
 ### Arduino Hangs After Receiving I2C
