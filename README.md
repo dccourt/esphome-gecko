@@ -38,13 +38,59 @@ Home Assistant integration for Gecko spa systems using ESP32-S2 and Arduino Nano
 
 1. **Set up hardware** - See [Hardware Build](#hardware-build) section below
 
-2. **Flash the Arduino Nano** - Install PlatformIO and upload the I2C proxy firmware:
+2. **Flash the Arduino Nano** - Choose one of the following options:
+
+   **Option A: Use Precompiled Binary (Recommended)**
+
+   Download the precompiled `arduino-i2c-proxy.hex` from the [GitHub Releases](https://github.com/zteifel/esphome-gecko/releases) page and flash it using avrdude:
    ```bash
-   pip install platformio
-   cd arduino
-   pio run -t upload
+   # Install avrdude (Ubuntu/Debian)
+   sudo apt install avrdude
+
+   # Flash the hex file (adjust port as needed)
+   avrdude -v -patmega328p -carduino -P/dev/ttyUSB0 -b115200 -D -Uflash:w:arduino-i2c-proxy.hex:i
    ```
-   > **Note:** The `platformio.ini` includes `-DTWI_BUFFER_LENGTH=128 -DBUFFER_LENGTH=128` to handle multi-part I2C messages (up to 78 bytes per part). This is critical - the default Arduino Wire buffer is only 32 bytes.
+
+   **Option B: Build from Source with PlatformIO**
+
+   The Arduino Wire library has a default 32-byte I2C buffer, but the spa sends messages up to 78 bytes. You **must** patch the Wire library to increase this buffer.
+
+   1. Install PlatformIO:
+      ```bash
+      pip install platformio
+      ```
+
+   2. Initialize the project to download dependencies:
+      ```bash
+      cd arduino
+      pio run
+      ```
+
+   3. **Patch the Wire library** - Edit the twi.h file to increase the buffer size:
+      ```bash
+      # Find your PlatformIO packages directory (usually ~/.platformio/packages/)
+      # Edit the twi.h file:
+      nano ~/.platformio/packages/framework-arduino-avr/libraries/Wire/src/utility/twi.h
+      ```
+
+      Find the line:
+      ```c
+      #ifndef TWI_BUFFER_LENGTH
+      #define TWI_BUFFER_LENGTH 32
+      ```
+
+      Change `32` to `128`:
+      ```c
+      #ifndef TWI_BUFFER_LENGTH
+      #define TWI_BUFFER_LENGTH 128
+      ```
+
+   4. Build and upload:
+      ```bash
+      pio run -t upload
+      ```
+
+   > **Why is patching needed?** The `-DTWI_BUFFER_LENGTH=128` build flag in `platformio.ini` should override this value, but some PlatformIO versions don't apply it correctly. Patching the source file directly ensures the buffer is always 128 bytes.
 
 3. **Create a secrets.yaml file** with your credentials:
    ```yaml
@@ -625,7 +671,8 @@ TEMP_RAW = (temperature_celsius × 18) - 512
 
 ### Arduino Hangs After Receiving I2C
 
-- Ensure buffer size flags are set: `-DTWI_BUFFER_LENGTH=128 -DBUFFER_LENGTH=128`
+- **Most common cause:** I2C buffer too small. The Wire library defaults to 32 bytes, but spa messages are up to 78 bytes. See [Flash the Arduino Nano](#quick-start) for patching instructions or use the precompiled binary.
+- Verify the patch was applied: after patching `twi.h`, the line should read `#define TWI_BUFFER_LENGTH 128`
 - Do NOT use `digitalRead()` on SDA/SCL pins
 - Do NOT use hardware watchdog
 
