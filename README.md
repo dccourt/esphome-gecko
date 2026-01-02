@@ -42,14 +42,26 @@ Home Assistant integration for Gecko spa systems using ESP32-S2 and Arduino Nano
 
    **Option A: Use Precompiled Binary (Recommended)**
 
-   Download the precompiled `arduino-i2c-proxy.hex` from the [GitHub Releases](https://github.com/zteifel/esphome-gecko/releases) page and flash it using avrdude:
+   Download the appropriate precompiled hex file from the [GitHub Releases](https://github.com/zteifel/esphome-gecko/releases) page:
+
+   | File | Board | Upload Baud |
+   |------|-------|-------------|
+   | `arduino-i2c-proxy-atmega328p-new-bootloader.hex` | Arduino Nano Clone (CH340) | 115200 |
+   | `arduino-i2c-proxy-atmega328p-old-bootloader.hex` | Original Arduino Nano | 57600 |
+
+   Flash using avrdude:
    ```bash
    # Install avrdude (Ubuntu/Debian)
    sudo apt install avrdude
 
-   # Flash the hex file (adjust port as needed)
-   avrdude -v -patmega328p -carduino -P/dev/ttyUSB0 -b115200 -D -Uflash:w:arduino-i2c-proxy.hex:i
+   # For Nano Clone (new bootloader) - 115200 baud
+   avrdude -v -patmega328p -carduino -P/dev/ttyUSB0 -b115200 -D -Uflash:w:arduino-i2c-proxy-atmega328p-new-bootloader.hex:i
+
+   # For Original Nano (old bootloader) - 57600 baud
+   avrdude -v -patmega328p -carduino -P/dev/ttyUSB0 -b57600 -D -Uflash:w:arduino-i2c-proxy-atmega328p-old-bootloader.hex:i
    ```
+
+   > **Tip:** Most cheap Nano clones from AliExpress/Amazon use the new bootloader (CH340 USB chip). If upload fails at 115200, try the old bootloader version at 57600.
 
    **Option B: Build from Source with PlatformIO**
 
