@@ -1,4 +1,5 @@
-# Gecko Spa Controller
+<p align="center"><img src="https://github.com/zteifel/esphome-gecko/blob/master/logo.png" alt="Smart Spa Heating" width="250"></p>
+
 
 Home Assistant integration for Gecko spa systems using ESP32-S2 and Arduino Nano Clone as an I2C proxy. Tested together with a Gecko IN.YE-3-H3.0 (YE-3-CE) spa controller.
 
