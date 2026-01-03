@@ -321,10 +321,10 @@ Output voltage: ~2.7V (within ESP32 3.3V logic threshold)
 
 ### Wiring Diagram
 Credits to agittins for the pictures
-![](./pictures/spa_pinouts.png)
-![](./pictures/spa_power.png)
-![](./pictures/adafruit_esp32s2.png)
-<img src="./pictures/arduino_nano_pinout.webp" width="400">
+
+<img src="./pictures/spa_pinouts.png" width="500"><img src="./pictures/spa_power.png" width="400">
+<img src="./pictures/arduino_nano_pinout.webp" width="350"><img src="./pictures/adafruit_esp32s2.png" width="550">
+
 ```
                     ┌─────────────────┐
                     │   Gecko Spa     │
@@ -340,18 +340,18 @@ Credits to agittins for the pictures
     │  │                                               │  │
     │  │  A4(SDA)  A5(SCL)  GND   TX(D1)  RX(D0)  RST  │  │
     │  └──────────────────────────────┬───────┬────┬───┘  │
-    │                                 │       │    │      │
-    │                              [2.7kΩ]    │    │      │
-    │                                 │       │    │      │
-    │                                 ├───────┼────┼──────┤
-    │                              [5.6kΩ]    │    │      │
-    │                                 │       │    │      │
-    │                                GND      │    │      │
-    │                                 |       │    │      │
-    │  ┌──────────────────────────────┴───────┴────┴───┐  │
-    │  │           Adafruit ESP32-S2                   │  │
+    │                        |        │       │    │      │
+    │                        |     [2.7kΩ]    │    │      │
+    │                        |        │       │    │      │
+    │                        |─[5.6kΩ]┼       |    |      │ 
+    │                        |        │       │    |      │
+    │                        |        │       │    │      │
+    │                        |        |       │    │      │
+    │                        |        |       │    │      │
+    │  ┌─────────────────────┴────────┴───────┴────┴───┐  │
+    │  │                    GND     GPIO16 GPIO5 GPIO17│  │
     │  │                                               │  │
-    │  │  GPIO16(RX)  GPIO5(TX)  GPIO17(RST)  USB-C    │  │
+    │  │               Adafruit ESP32-S2               │  │
     │  └───────────────────────────────────────────────┘  │
     │                                                     │
     └─────────────────────────────────────────────────────┘
