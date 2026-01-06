@@ -205,39 +205,37 @@ binary_sensor:
     name: "Spa Connected"
     device_class: connectivity
 
-# Maintenance reminder sensors
-sensor:
-  - platform: gecko_spa
-    gecko_spa_id: spa
-    type: rinse_filter
-    name: "Rinse Filter"
-    icon: "mdi:air-filter"
-
-  - platform: gecko_spa
-    gecko_spa_id: spa
-    type: clean_filter
-    name: "Clean Filter"
-    icon: "mdi:air-filter"
-
-  - platform: gecko_spa
-    gecko_spa_id: spa
-    type: change_water
-    name: "Change Water"
-    icon: "mdi:water-sync"
-
-  - platform: gecko_spa
-    gecko_spa_id: spa
-    type: spa_checkup
-    name: "Spa Checkup"
-    icon: "mdi:wrench-clock"
-
-# Spa internal clock
+# Spa internal clock and maintenance reminder due dates
 text_sensor:
   - platform: gecko_spa
     gecko_spa_id: spa
     type: spa_time
     name: "Spa Time"
     icon: "mdi:clock-outline"
+
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    type: rinse_filter
+    name: "Rinse Filter Due"
+    icon: "mdi:air-filter"
+
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    type: clean_filter
+    name: "Clean Filter Due"
+    icon: "mdi:air-filter"
+
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    type: change_water
+    name: "Change Water Due"
+    icon: "mdi:water-sync"
+
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    type: spa_checkup
+    name: "Spa Checkup Due"
+    icon: "mdi:wrench-clock"
 ```
 
 5. **Flash and add to Home Assistant**:
@@ -265,10 +263,6 @@ After installation, you'll have these entities:
 | Spa Clean Filter Due | Text Sensor | Due date for filter clean (YYYY-MM-DD) |
 | Spa Change Water Due | Text Sensor | Due date for water change (YYYY-MM-DD) |
 | Spa Checkup Due | Text Sensor | Due date for spa checkup (YYYY-MM-DD) |
-| Spa Rinse Filter Days | Sensor | Days remaining until filter rinse |
-| Spa Clean Filter Days | Sensor | Days remaining until filter clean |
-| Spa Change Water Days | Sensor | Days remaining until water change |
-| Spa Checkup Days | Sensor | Days remaining until spa checkup |
 | Refresh Spa Status | Button | Manually request status update |
 | Reset Arduino | Button | Reset the Arduino I2C proxy remotely |
 
