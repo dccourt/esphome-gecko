@@ -203,6 +203,10 @@ sensor:
       int now_days = now.year*365 + now.month*30 + now.day_of_month;
       return (float)(due_days - now_days);
 
+  - platform: wifi_signal
+    name: "Spa WiFi Signal"
+    update_interval: 60s
+
 # Buttons
 button:
   - platform: template
