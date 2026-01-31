@@ -14,9 +14,6 @@ SENSOR_TYPES = {
     "connected": "CONNECTED",
     "waterfall": "WATERFALL",
     "blower": "BLOWER",
-    "pump2": "PUMP2",
-    "pump3": "PUMP3",
-    "pump4": "PUMP4",
 }
 
 CONFIG_SCHEMA = binary_sensor.binary_sensor_schema().extend(
@@ -40,9 +37,3 @@ async def to_code(config):
         cg.add(parent.set_waterfall_sensor(var))
     elif sensor_type == "blower":
         cg.add(parent.set_blower_sensor(var))
-    elif sensor_type == "pump2":
-        cg.add(parent.set_pump2_sensor(var))
-    elif sensor_type == "pump3":
-        cg.add(parent.set_pump3_sensor(var))
-    elif sensor_type == "pump4":
-        cg.add(parent.set_pump4_sensor(var))

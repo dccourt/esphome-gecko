@@ -72,11 +72,29 @@ switch:
     name: "Spa Circulation"
     icon: "mdi:rotate-3d-variant"
 
-  # Pump 1 (controllable)
+  # Pumps 1-4 (controllable - P2-P4 use experimental function IDs)
   - platform: gecko_spa
     gecko_spa_id: spa
     type: pump1
     name: "Spa Pump 1"
+    icon: "mdi:pump"
+
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    type: pump2
+    name: "Spa Pump 2"
+    icon: "mdi:pump"
+
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    type: pump3
+    name: "Spa Pump 3"
+    icon: "mdi:pump"
+
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    type: pump4
+    name: "Spa Pump 4"
     icon: "mdi:pump"
 
 # Program selector
@@ -113,24 +131,6 @@ binary_sensor:
     type: blower
     name: "Spa Blower"
     icon: "mdi:fan"
-
-  - platform: gecko_spa
-    gecko_spa_id: spa
-    type: pump2
-    name: "Spa Pump 2"
-    icon: "mdi:pump"
-
-  - platform: gecko_spa
-    gecko_spa_id: spa
-    type: pump3
-    name: "Spa Pump 3"
-    icon: "mdi:pump"
-
-  - platform: gecko_spa
-    gecko_spa_id: spa
-    type: pump4
-    name: "Spa Pump 4"
-    icon: "mdi:pump"
 
 # Spa internal clock and notification due dates
 text_sensor:

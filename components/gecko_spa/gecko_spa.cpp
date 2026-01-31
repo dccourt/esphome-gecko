@@ -96,6 +96,45 @@ void GeckoSpa::send_pump1_command(uint8_t state) {
   ESP_LOGI(TAG, "Sent P1 state=%d command (val=0x%02X)", state, state_val);
 }
 
+void GeckoSpa::send_pump2_command(uint8_t state) {
+  // P2 function ID: 0x04 (EXPERIMENTAL - sequential from P1)
+  uint8_t state_val = (state == 0) ? 0x00 : 0x02;
+
+  uint8_t cmd[20] = {
+      0x17, 0x0A, 0x00, 0x00, 0x00, 0x17, 0x09, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x06, 0x46, 0x52, 0x51,
+      0x01, 0x04, state_val, 0x00};
+  cmd[19] = calc_checksum(cmd, 20);
+  send_i2c_message(cmd, 20);
+  ESP_LOGI(TAG, "Sent P2 state=%d command (val=0x%02X) [EXPERIMENTAL]", state, state_val);
+}
+
+void GeckoSpa::send_pump3_command(uint8_t state) {
+  // P3 function ID: 0x05 (EXPERIMENTAL - sequential from P1)
+  uint8_t state_val = (state == 0) ? 0x00 : 0x02;
+
+  uint8_t cmd[20] = {
+      0x17, 0x0A, 0x00, 0x00, 0x00, 0x17, 0x09, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x06, 0x46, 0x52, 0x51,
+      0x01, 0x05, state_val, 0x00};
+  cmd[19] = calc_checksum(cmd, 20);
+  send_i2c_message(cmd, 20);
+  ESP_LOGI(TAG, "Sent P3 state=%d command (val=0x%02X) [EXPERIMENTAL]", state, state_val);
+}
+
+void GeckoSpa::send_pump4_command(uint8_t state) {
+  // P4 function ID: 0x06 (EXPERIMENTAL - sequential from P1)
+  uint8_t state_val = (state == 0) ? 0x00 : 0x02;
+
+  uint8_t cmd[20] = {
+      0x17, 0x0A, 0x00, 0x00, 0x00, 0x17, 0x09, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x06, 0x46, 0x52, 0x51,
+      0x01, 0x06, state_val, 0x00};
+  cmd[19] = calc_checksum(cmd, 20);
+  send_i2c_message(cmd, 20);
+  ESP_LOGI(TAG, "Sent P4 state=%d command (val=0x%02X) [EXPERIMENTAL]", state, state_val);
+}
+
 
 void GeckoSpa::send_program_command(uint8_t prog) {
   if (prog > 4)
@@ -642,27 +681,26 @@ void GeckoSpa::parse_status_message(const uint8_t *data) {
     update_climate_state();
   }
 
-  // Update P1-P4 pump states
+  // Update P1-P4 pump states (all controllable switches)
   if (first || new_p1 != pump1_state_) {
     pump1_state_ = new_p1;
     if (pump1_switch_)
       pump1_switch_->publish_state(pump1_state_ != 0);
   }
-  // Update P2-P4 as binary sensors (read-only)
   if (first || new_p2 != pump2_state_) {
     pump2_state_ = new_p2;
-    if (pump2_sensor_)
-      pump2_sensor_->publish_state(pump2_state_ != 0);
+    if (pump2_switch_)
+      pump2_switch_->publish_state(pump2_state_ != 0);
   }
   if (first || new_p3 != pump3_state_) {
     pump3_state_ = new_p3;
-    if (pump3_sensor_)
-      pump3_sensor_->publish_state(pump3_state_ != 0);
+    if (pump3_switch_)
+      pump3_switch_->publish_state(pump3_state_ != 0);
   }
   if (first || new_p4 != pump4_state_) {
     pump4_state_ = new_p4;
-    if (pump4_sensor_)
-      pump4_sensor_->publish_state(pump4_state_ != 0);
+    if (pump4_switch_)
+      pump4_switch_->publish_state(pump4_state_ != 0);
   }
 }
 
@@ -800,6 +838,12 @@ void GeckoSpaSwitch::write_state(bool state) {
     parent_->send_circ_command(state);
   } else if (switch_type_ == "pump1") {
     parent_->send_pump1_command(state ? 1 : 0);  // 1=HIGH, 0=OFF
+  } else if (switch_type_ == "pump2") {
+    parent_->send_pump2_command(state ? 1 : 0);  // EXPERIMENTAL
+  } else if (switch_type_ == "pump3") {
+    parent_->send_pump3_command(state ? 1 : 0);  // EXPERIMENTAL
+  } else if (switch_type_ == "pump4") {
+    parent_->send_pump4_command(state ? 1 : 0);  // EXPERIMENTAL
   }
   // State will be published when spa confirms the change
 }

@@ -74,12 +74,12 @@ class GeckoSpa : public Component, public uart::UARTDevice {
   void set_light_switch(switch_::Switch *sw) { light_switch_ = sw; }
   void set_circ_switch(switch_::Switch *sw) { circ_switch_ = sw; }
   void set_pump1_switch(switch_::Switch *sw) { pump1_switch_ = sw; }
+  void set_pump2_switch(switch_::Switch *sw) { pump2_switch_ = sw; }
+  void set_pump3_switch(switch_::Switch *sw) { pump3_switch_ = sw; }
+  void set_pump4_switch(switch_::Switch *sw) { pump4_switch_ = sw; }
   // Entity setters - binary sensors (read-only status)
   void set_waterfall_sensor(binary_sensor::BinarySensor *bs) { waterfall_sensor_ = bs; }
   void set_blower_sensor(binary_sensor::BinarySensor *bs) { blower_sensor_ = bs; }
-  void set_pump2_sensor(binary_sensor::BinarySensor *bs) { pump2_sensor_ = bs; }
-  void set_pump3_sensor(binary_sensor::BinarySensor *bs) { pump3_sensor_ = bs; }
-  void set_pump4_sensor(binary_sensor::BinarySensor *bs) { pump4_sensor_ = bs; }
   void set_program_select(select::Select *sel) { program_select_ = sel; }
   void set_standby_sensor(binary_sensor::BinarySensor *bs) {
     standby_sensor_ = bs;
@@ -105,7 +105,10 @@ class GeckoSpa : public Component, public uart::UARTDevice {
   // Command methods
   void send_light_command(bool on);
   void send_circ_command(bool on);
-  void send_pump1_command(uint8_t state);  // P1 only, state: 0=OFF, 1=HIGH, 2=LOW
+  void send_pump1_command(uint8_t state);  // state: 0=OFF, 1=HIGH, 2=LOW
+  void send_pump2_command(uint8_t state);  // Experimental: func ID 0x04
+  void send_pump3_command(uint8_t state);  // Experimental: func ID 0x05
+  void send_pump4_command(uint8_t state);  // Experimental: func ID 0x06
   void send_program_command(uint8_t prog);
   void send_temperature_command(float temp_c);
   void request_status();
@@ -116,6 +119,9 @@ class GeckoSpa : public Component, public uart::UARTDevice {
   bool get_circ_state() { return circ_state_; }
   bool get_waterfall_state() { return waterfall_state_; }
   uint8_t get_pump1_state() { return pump1_state_; }  // 0=OFF, 1=HIGH, 2=LOW
+  uint8_t get_pump2_state() { return pump2_state_; }
+  uint8_t get_pump3_state() { return pump3_state_; }
+  uint8_t get_pump4_state() { return pump4_state_; }
   float get_target_temp() { return target_temp_; }
   float get_actual_temp() { return actual_temp_; }
   bool is_heating() { return heating_state_; }
@@ -125,12 +131,12 @@ class GeckoSpa : public Component, public uart::UARTDevice {
   switch_::Switch *light_switch_{nullptr};
   switch_::Switch *circ_switch_{nullptr};
   switch_::Switch *pump1_switch_{nullptr};
+  switch_::Switch *pump2_switch_{nullptr};
+  switch_::Switch *pump3_switch_{nullptr};
+  switch_::Switch *pump4_switch_{nullptr};
   // Entity pointers - binary sensors (read-only)
   binary_sensor::BinarySensor *waterfall_sensor_{nullptr};
   binary_sensor::BinarySensor *blower_sensor_{nullptr};
-  binary_sensor::BinarySensor *pump2_sensor_{nullptr};
-  binary_sensor::BinarySensor *pump3_sensor_{nullptr};
-  binary_sensor::BinarySensor *pump4_sensor_{nullptr};
   select::Select *program_select_{nullptr};
   binary_sensor::BinarySensor *standby_sensor_{nullptr};
   binary_sensor::BinarySensor *connected_sensor_{nullptr};
