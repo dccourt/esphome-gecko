@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include "esphome/core/component.h"
 #include "esphome/core/gpio.h"
@@ -13,6 +14,52 @@
 
 namespace esphome {
 namespace gecko_spa {
+
+// Geckolib-compatible offset structure for log/status messages
+// Offsets are geckolib offsets (base 256), convert to message byte with: byte = offset - 254
+struct GeckoLogOffsets {
+  uint16_t hours;           // Operating hours
+  uint16_t quietState;      // Quiet/drain/soak mode
+  uint16_t udP1;            // User demand P1-P4 (2-bit fields)
+  uint16_t deviceStatus;    // CP, BL, Heater, Waterfall bits
+  uint16_t p1;              // P1-P4 device status (2-bit fields)
+  uint16_t udLi;            // Light user demand
+  uint16_t realSetPointG;   // Target temperature (word)
+  uint16_t displayedTempG;  // Actual temperature (word)
+  uint16_t lockMode;        // Keypad lock status
+  uint16_t packType;        // Pack type identifier
+  uint16_t udPumpTime;      // Pump timer countdown
+};
+
+// Default offsets for inYT v51+ (most common)
+static const GeckoLogOffsets GECKO_LOG_OFFSETS_V51 = {
+  .hours = 256,
+  .quietState = 257,
+  .udP1 = 259,
+  .deviceStatus = 260,
+  .p1 = 261,
+  .udLi = 307,
+  .realSetPointG = 275,
+  .displayedTempG = 277,
+  .lockMode = 310,
+  .packType = 289,
+  .udPumpTime = 303,
+};
+
+// Offsets for inYT v50 (older version with shifted offsets)
+static const GeckoLogOffsets GECKO_LOG_OFFSETS_V50 = {
+  .hours = 284,
+  .quietState = 285,
+  .udP1 = 258,
+  .deviceStatus = 259,
+  .p1 = 260,
+  .udLi = 307,
+  .realSetPointG = 274,
+  .displayedTempG = 276,
+  .lockMode = 309,
+  .packType = 288,
+  .udPumpTime = 302,
+};
 
 class GeckoSpaClimate;
 
@@ -95,6 +142,11 @@ class GeckoSpa : public Component, public uart::UARTDevice {
   uint32_t last_go_send_time_{0};
   uint32_t reset_start_time_{0};
   bool reset_in_progress_{false};
+
+  // Version tracking (parsed from handshake XML filenames)
+  uint8_t config_version_{0};   // e.g., 82 from inYT_C82.xml
+  uint8_t status_version_{0};   // e.g., 81 from inYT_S81.xml
+  const GeckoLogOffsets *log_offsets_{&GECKO_LOG_OFFSETS_V51};  // Default to v51+
 
   // UART buffer
   char uart_buffer_[512];

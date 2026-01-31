@@ -251,12 +251,34 @@ void GeckoSpa::process_i2c_message(const uint8_t *data, uint8_t len) {
 
     ESP_LOGI(TAG, "Handshake XML: %s", xml_name);
 
-    // Publish to appropriate sensor based on filename pattern
-    // inYT_C82.xml = Config version, inYT_S81.xml = Status version
-    if (strstr(xml_name, "_C") != nullptr && config_version_sensor_) {
-      config_version_sensor_->publish_state(xml_name);
-    } else if (strstr(xml_name, "_S") != nullptr && status_version_sensor_) {
-      status_version_sensor_->publish_state(xml_name);
+    // Parse version number from filename (e.g., inYT_C82.xml -> 82)
+    // Look for _C or _S followed by digits
+    const char *ver_ptr = strstr(xml_name, "_C");
+    if (ver_ptr == nullptr) ver_ptr = strstr(xml_name, "_S");
+    if (ver_ptr != nullptr) {
+      int version = atoi(ver_ptr + 2);
+
+      // Publish to appropriate sensor and store version
+      if (strstr(xml_name, "_C") != nullptr) {
+        config_version_ = version;
+        if (config_version_sensor_)
+          config_version_sensor_->publish_state(xml_name);
+        ESP_LOGI(TAG, "Config version: %d", config_version_);
+      } else if (strstr(xml_name, "_S") != nullptr) {
+        status_version_ = version;
+        if (status_version_sensor_)
+          status_version_sensor_->publish_state(xml_name);
+        ESP_LOGI(TAG, "Status version: %d", status_version_);
+
+        // Select appropriate offsets based on status version
+        if (status_version_ <= 50) {
+          log_offsets_ = &GECKO_LOG_OFFSETS_V50;
+          ESP_LOGI(TAG, "Using v50 log offsets");
+        } else {
+          log_offsets_ = &GECKO_LOG_OFFSETS_V51;
+          ESP_LOGI(TAG, "Using v51+ log offsets");
+        }
+      }
     }
 
     send_i2c_message(ACK_MESSAGE, 15);
@@ -418,24 +440,114 @@ void GeckoSpa::process_i2c_message(const uint8_t *data, uint8_t len) {
 }
 
 void GeckoSpa::parse_status_message(const uint8_t *data) {
-  // Byte positions in 162-byte concatenated message (headers stripped from all 3 parts)
-  // Circulation appears at byte 109/110 based on observed on/off sequence
-  bool new_standby = (data[3] == 0x03);
-  bool new_pump = (data[5] == 0x02) || (data[7] == 0x01);
-  bool new_circ = (data[112] == 0x01) || (data[6] & 0x80);  // Byte 112 for manual, byte 6 bit 7 for heating
-  bool new_heating = (data[6] & 0x20) || (data[26] & 0x04);
-  bool new_light = (data[53] == 0x01);
+  // Convert geckolib offset to message byte: byte = geckolib_offset - 254
+  // This accounts for the +2 byte misalignment between geckolib structs and actual message
+  auto toB = [](uint16_t geckoOffset) -> uint16_t { return geckoOffset - 254; };
 
-  // Temperature - only parse if temp data is present
-  float new_target = target_temp_;
-  float new_actual = actual_temp_;
-  bool temp_valid = (data[21] != 0 || data[22] != 0);
-  if (temp_valid) {
-    uint16_t target_raw = (data[21] << 8) | data[22];
-    new_target = target_raw / 18.0;
-    uint16_t actual_raw = (data[23] << 8) | data[24];
-    new_actual = actual_raw / 18.0;
-  }
+  // Get offsets from version-specific struct
+  const GeckoLogOffsets &off = *log_offsets_;
+
+  // Calculate message byte positions
+  uint16_t b_hours = toB(off.hours);
+  uint16_t b_quietState = toB(off.quietState);
+  uint16_t b_udP1 = toB(off.udP1);
+  uint16_t b_deviceStatus = toB(off.deviceStatus);
+  uint16_t b_p1 = toB(off.p1);
+  uint16_t b_udLi = toB(off.udLi);
+  uint16_t b_realSetPoint = toB(off.realSetPointG);
+  uint16_t b_displayedTemp = toB(off.displayedTempG);
+  uint16_t b_lockMode = toB(off.lockMode);
+  uint16_t b_packType = toB(off.packType);
+  uint16_t b_udPumpTime = toB(off.udPumpTime);
+
+  // === Decode all fields from geckolib-compatible offsets ===
+
+  // Hours counter
+  uint8_t hours = data[b_hours];
+
+  // QuietState: 0=NOT_SET, 1=DRAIN, 2=SOAK, 3=OFF
+  uint8_t quietState = data[b_quietState];
+  static const char* quiet_str[] = {"NOT_SET", "DRAIN", "SOAK", "OFF"};
+
+  // User demand P1-P4 (2-bit fields in UdP1 byte)
+  uint8_t udP1_raw = data[b_udP1];
+  uint8_t udP1 = (udP1_raw >> 0) & 0x03;  // bits 0-1
+  uint8_t udP2 = (udP1_raw >> 2) & 0x03;  // bits 2-3
+  uint8_t udP3 = (udP1_raw >> 4) & 0x03;  // bits 4-5
+  uint8_t udP4 = (udP1_raw >> 6) & 0x03;  // bits 6-7
+  static const char* pump_ud_str[] = {"OFF", "LO", "HI", "?"};
+
+  // Device status byte (CP, BL, Heater, Waterfall)
+  uint8_t devStatus = data[b_deviceStatus];
+  bool cp_on = (devStatus >> 2) & 0x01;      // bit 2: CP (circulation pump)
+  bool bl_on = (devStatus >> 1) & 0x01;      // bit 1: BL (blower)
+  bool heater_on = (devStatus >> 5) & 0x01;  // bit 5: MSTR_HEATER
+  bool waterfall = (devStatus >> 7) & 0x01;  // bit 7: Waterfall
+
+  // P1-P4 device status (2-bit fields)
+  uint8_t p1_raw = data[b_p1];
+  uint8_t p1_state = (p1_raw >> 0) & 0x03;  // bits 0-1: 0=OFF, 1=HIGH, 2=LOW
+  uint8_t p2_state = (p1_raw >> 2) & 0x03;  // bits 2-3
+  uint8_t p3_state = (p1_raw >> 4) & 0x03;  // bits 4-5
+  uint8_t p4_state = (p1_raw >> 6) & 0x03;  // bits 6-7
+  static const char* pump_state_str[] = {"OFF", "HIGH", "LOW", "?"};
+
+  // Light user demand
+  uint8_t udLi = data[b_udLi];
+
+  // Lock mode: 0=UNLOCK, 1=PARTIAL, 2=FULL
+  uint8_t lockMode = data[b_lockMode];
+  static const char* lock_str[] = {"UNLOCK", "PARTIAL", "FULL"};
+
+  // Pack type
+  uint8_t packType = data[b_packType];
+  static const char* pack_str[] = {"Unknown", "inXE", "MasIBC", "MIA", "DJS4", "inClear", "inXM", "K600", "inTerface", "inTouch", "inYT"};
+
+  // Pump timer countdown
+  uint8_t pumpTime = data[b_udPumpTime];
+
+  // Temperature (word values, big-endian)
+  uint16_t target_raw = (data[b_realSetPoint] << 8) | data[b_realSetPoint + 1];
+  uint16_t actual_raw = (data[b_displayedTemp] << 8) | data[b_displayedTemp + 1];
+  float target_temp = target_raw / 18.0f;
+  float actual_temp = actual_raw / 18.0f;
+
+  // === Log decoded status (geckolib format) ===
+  ESP_LOGI(TAG, "Status[v%d]: Hours=%d QuietState=%s LockMode=%s PackType=%s",
+           status_version_, hours,
+           quietState < 4 ? quiet_str[quietState] : "?",
+           lockMode < 3 ? lock_str[lockMode] : "?",
+           packType < 11 ? pack_str[packType] : "?");
+
+  ESP_LOGI(TAG, "Status: Temp=%.1f/%.1f°C Heater=%s CP=%s BL=%s Waterfall=%s",
+           target_temp, actual_temp,
+           heater_on ? "ON" : "OFF",
+           cp_on ? "ON" : "OFF",
+           bl_on ? "ON" : "OFF",
+           waterfall ? "ON" : "OFF");
+
+  ESP_LOGI(TAG, "Status: P1=%s P2=%s P3=%s P4=%s PumpTimer=%dmin",
+           pump_state_str[p1_state], pump_state_str[p2_state],
+           pump_state_str[p3_state], pump_state_str[p4_state],
+           pumpTime);
+
+  ESP_LOGI(TAG, "Status: UdP1=%s UdP2=%s UdP3=%s UdP4=%s UdLi=%s",
+           pump_ud_str[udP1], pump_ud_str[udP2],
+           pump_ud_str[udP3], pump_ud_str[udP4],
+           udLi ? "ON" : "OFF");
+
+  // === Update internal state and entities ===
+
+  // Derive states for Home Assistant entities
+  bool new_standby = (quietState == 0x03);  // OFF in QuietState means standby
+  bool new_pump = (p1_state != 0);  // P1 not OFF
+  bool new_circ = cp_on;  // Circulation pump from device status
+  bool new_heating = heater_on;
+  bool new_light = (udLi != 0);
+
+  float new_target = target_temp;
+  float new_actual = actual_temp;
+  bool temp_valid = (target_raw != 0 || actual_raw != 0);
 
   // On first status message, publish all states
   bool first = !first_status_received_;
