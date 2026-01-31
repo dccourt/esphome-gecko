@@ -45,8 +45,8 @@ void GeckoSpa::loop() {
     }
   }
 
-  // Check connection timeout (5 minutes)
-  if (connected_ && (millis() - last_i2c_time_ > 300000)) {
+  // Check connection timeout (1 minute)
+  if (connected_ && (millis() - last_i2c_time_ > 60000)) {
     connected_ = false;
     if (connected_sensor_)
       connected_sensor_->publish_state(false);
