@@ -361,13 +361,42 @@ void GeckoSpa::process_i2c_message(const uint8_t *data, uint8_t len) {
       parse_status_message(msg_buffer_);
     } else if (msg_buffer_len_ >= 380 && msg_buffer_len_ <= 400) {
       // Config+status message (~390 bytes)
-      // Status portion starts at offset 228 (390-228=162 bytes, matching status message size)
-      // Offset mapping: 162-byte byte[N] → 390-byte byte[228+N]
+      // Config section has +2 byte offset (geckolib offset N → message byte N+2)
+      // Status portion starts at offset 228
+      static const int CFG_OFFSET = 2;  // Config struct offset
       static const int STATUS_OFFSET = 228;
-      ESP_LOGI(TAG, "Config msg (%db): parsing status from offset %d", msg_buffer_len_, STATUS_OFFSET);
+
+      // Parse config section (with +2 offset from geckolib struct definitions)
+      // Geckolib offsets → message bytes: N → N+2
+      uint8_t config_num = msg_buffer_[CFG_OFFSET + 0];
+      uint16_t setpoint_raw = (msg_buffer_[CFG_OFFSET + 1] << 8) | msg_buffer_[CFG_OFFSET + 2];
+      float setpoint_c = setpoint_raw / 18.0f;
+      uint8_t filt_freq = msg_buffer_[CFG_OFFSET + 3];
+      uint8_t temp_units = msg_buffer_[CFG_OFFSET + 33];  // 0=F, 1=C
+      uint8_t time_format = msg_buffer_[CFG_OFFSET + 34]; // 0=NA, 1=AmPm, 2=24h
+      uint8_t pump_timeout = msg_buffer_[CFG_OFFSET + 54];
+      uint8_t light_timeout = msg_buffer_[CFG_OFFSET + 55];
+      uint8_t econ_type = msg_buffer_[CFG_OFFSET + 70];   // 0=Standard, 1=Night
+      uint8_t customer_id = msg_buffer_[CFG_OFFSET + 111];
+      uint8_t num_zones = msg_buffer_[CFG_OFFSET + 127];
+      uint8_t silent_mode = msg_buffer_[CFG_OFFSET + 157]; // 0=NA, 1=OFF, 2=ECONOMY, 3=SLEEP, 4=NIGHT
+
+      static const char* time_fmt_str[] = {"NA", "AmPm", "24h"};
+      static const char* silent_str[] = {"NA", "OFF", "ECONOMY", "SLEEP", "NIGHT"};
+      static const char* econ_str[] = {"Standard", "Night"};
+
+      ESP_LOGI(TAG, "Config: Ver=%d Setpoint=%.1f%s FiltFreq=%d TimeFormat=%s",
+               config_num, setpoint_c, temp_units == 1 ? "C" : "F", filt_freq,
+               time_format < 3 ? time_fmt_str[time_format] : "?");
+      ESP_LOGI(TAG, "Config: PumpTimeout=%dmin LightTimeout=%dmin EconType=%s",
+               pump_timeout, light_timeout,
+               econ_type < 2 ? econ_str[econ_type] : "?");
+      ESP_LOGI(TAG, "Config: CustomerID=%d Zones=%d SilentMode=%s",
+               customer_id, num_zones,
+               silent_mode < 5 ? silent_str[silent_mode] : "?");
 
       // Reuse the 162-byte status parser on the status portion
-      if (msg_buffer_len_ >= STATUS_OFFSET + 120) {  // Need at least 120 bytes for circ at 112
+      if (msg_buffer_len_ >= STATUS_OFFSET + 120) {
         parse_status_message(&msg_buffer_[STATUS_OFFSET]);
       }
     }
