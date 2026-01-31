@@ -72,16 +72,6 @@ void GeckoSpa::send_light_command(bool on) {
   ESP_LOGI(TAG, "Sent light %s command", on ? "ON" : "OFF");
 }
 
-void GeckoSpa::send_pump_command(bool on) {
-  uint8_t cmd[20] = {
-      0x17, 0x0A, 0x00, 0x00, 0x00, 0x17, 0x09, 0x00,
-      0x00, 0x00, 0x00, 0x00, 0x06, 0x46, 0x52, 0x51,
-      0x01, 0x03, (uint8_t)(on ? 0x02 : 0x00), 0x00};
-  cmd[19] = calc_checksum(cmd, 20);
-  send_i2c_message(cmd, 20);
-  ESP_LOGI(TAG, "Sent pump %s command", on ? "ON" : "OFF");
-}
-
 void GeckoSpa::send_circ_command(bool on) {
   uint8_t cmd[20] = {
       0x17, 0x0A, 0x00, 0x00, 0x00, 0x17, 0x09, 0x00,
@@ -91,6 +81,21 @@ void GeckoSpa::send_circ_command(bool on) {
   send_i2c_message(cmd, 20);
   ESP_LOGI(TAG, "Sent circ %s command", on ? "ON" : "OFF");
 }
+
+void GeckoSpa::send_pump1_command(uint8_t state) {
+  // P1 function ID: 0x03
+  // State: 0=OFF, 2=ON/HIGH (P1 uses 0x02 for ON, not 0x01)
+  uint8_t state_val = (state == 0) ? 0x00 : 0x02;
+
+  uint8_t cmd[20] = {
+      0x17, 0x0A, 0x00, 0x00, 0x00, 0x17, 0x09, 0x00,
+      0x00, 0x00, 0x00, 0x00, 0x06, 0x46, 0x52, 0x51,
+      0x01, 0x03, state_val, 0x00};
+  cmd[19] = calc_checksum(cmd, 20);
+  send_i2c_message(cmd, 20);
+  ESP_LOGI(TAG, "Sent P1 state=%d command (val=0x%02X)", state, state_val);
+}
+
 
 void GeckoSpa::send_program_command(uint8_t prog) {
   if (prog > 4)
@@ -540,10 +545,17 @@ void GeckoSpa::parse_status_message(const uint8_t *data) {
 
   // Derive states for Home Assistant entities
   bool new_standby = (quietState == 0x03);  // OFF in QuietState means standby
-  bool new_pump = (p1_state != 0);  // P1 not OFF
-  bool new_circ = cp_on;  // Circulation pump from device status
-  bool new_heating = heater_on;
-  bool new_light = (udLi != 0);
+  bool new_circ = cp_on;              // Circulation pump from device status (CP)
+  bool new_waterfall = waterfall;     // Waterfall from device status
+  bool new_blower = bl_on;            // Blower from device status (BL)
+  bool new_heating = heater_on;       // Heater from device status
+  bool new_light = (udLi != 0);       // Light from UdLi (user demand light)
+
+  // P1-P4 individual pump states (0=OFF, 1=HIGH, 2=LOW)
+  uint8_t new_p1 = p1_state;
+  uint8_t new_p2 = p2_state;
+  uint8_t new_p3 = p3_state;
+  uint8_t new_p4 = p4_state;
 
   float new_target = target_temp;
   float new_actual = actual_temp;
@@ -564,18 +576,25 @@ void GeckoSpa::parse_status_message(const uint8_t *data) {
       light_switch_->publish_state(light_state_);
   }
 
-  if (first || new_pump != pump_state_) {
-    pump_state_ = new_pump;
-    ESP_LOGI(TAG, "Pump: %s", pump_state_ ? "ON" : "OFF");
-    if (pump_switch_)
-      pump_switch_->publish_state(pump_state_);
-  }
-
   if (first || new_circ != circ_state_) {
     circ_state_ = new_circ;
     ESP_LOGI(TAG, "Circulation: %s", circ_state_ ? "ON" : "OFF");
     if (circ_switch_)
       circ_switch_->publish_state(circ_state_);
+  }
+
+  if (first || new_waterfall != waterfall_state_) {
+    waterfall_state_ = new_waterfall;
+    ESP_LOGI(TAG, "Waterfall: %s", waterfall_state_ ? "ON" : "OFF");
+    if (waterfall_sensor_)
+      waterfall_sensor_->publish_state(waterfall_state_);
+  }
+
+  if (first || new_blower != blower_state_) {
+    blower_state_ = new_blower;
+    ESP_LOGI(TAG, "Blower: %s", blower_state_ ? "ON" : "OFF");
+    if (blower_sensor_)
+      blower_sensor_->publish_state(blower_state_);
   }
 
   if (first || new_heating != heating_state_) {
@@ -591,12 +610,59 @@ void GeckoSpa::parse_status_message(const uint8_t *data) {
       standby_sensor_->publish_state(standby_state_);
   }
 
+  // Update LockMode sensor
+  if (first || lockMode != lock_mode_) {
+    lock_mode_ = lockMode;
+    if (lock_mode_sensor_) {
+      lock_mode_sensor_->publish_state(lockMode < 3 ? lock_str[lockMode] : "?");
+    }
+  }
+
+  // Update PackType sensor
+  if (first || packType != pack_type_) {
+    pack_type_ = packType;
+    if (pack_type_sensor_) {
+      pack_type_sensor_->publish_state(packType < 11 ? pack_str[packType] : "?");
+    }
+  }
+
+  // Update PumpTimer sensor
+  if (first || pumpTime != pump_timer_) {
+    pump_timer_ = pumpTime;
+    if (pump_timer_sensor_) {
+      pump_timer_sensor_->publish_state(pumpTime);
+    }
+  }
+
   // Only update temperature if valid data was received
   if (temp_valid && (first || abs(new_target - target_temp_) > 0.1 || abs(new_actual - actual_temp_) > 0.1)) {
     target_temp_ = new_target;
     actual_temp_ = new_actual;
     ESP_LOGI(TAG, "Temp: target=%.1f actual=%.1f", target_temp_, actual_temp_);
     update_climate_state();
+  }
+
+  // Update P1-P4 pump states
+  if (first || new_p1 != pump1_state_) {
+    pump1_state_ = new_p1;
+    if (pump1_switch_)
+      pump1_switch_->publish_state(pump1_state_ != 0);
+  }
+  // Update P2-P4 as binary sensors (read-only)
+  if (first || new_p2 != pump2_state_) {
+    pump2_state_ = new_p2;
+    if (pump2_sensor_)
+      pump2_sensor_->publish_state(pump2_state_ != 0);
+  }
+  if (first || new_p3 != pump3_state_) {
+    pump3_state_ = new_p3;
+    if (pump3_sensor_)
+      pump3_sensor_->publish_state(pump3_state_ != 0);
+  }
+  if (first || new_p4 != pump4_state_) {
+    pump4_state_ = new_p4;
+    if (pump4_sensor_)
+      pump4_sensor_->publish_state(pump4_state_ != 0);
   }
 }
 
@@ -615,12 +681,14 @@ void GeckoSpa::update_climate_state() {
   }
 
   // Set action based on heating flag and temperature comparison
-  if (!heating_state_) {
-    climate_->action = climate::CLIMATE_ACTION_IDLE;
+  // heating_state_ is the authoritative source for whether heater is running
+  if (heating_state_) {
+    climate_->action = climate::CLIMATE_ACTION_HEATING;
   } else if (target_temp_ < actual_temp_) {
+    // Spa is cooling down (no active cooling, just natural heat loss)
     climate_->action = climate::CLIMATE_ACTION_COOLING;
   } else {
-    climate_->action = climate::CLIMATE_ACTION_HEATING;
+    climate_->action = climate::CLIMATE_ACTION_IDLE;
   }
 
   climate_->publish_state();
@@ -728,10 +796,10 @@ void GeckoSpaClimate::control(const climate::ClimateCall &call) {
 void GeckoSpaSwitch::write_state(bool state) {
   if (switch_type_ == "light") {
     parent_->send_light_command(state);
-  } else if (switch_type_ == "pump") {
-    parent_->send_pump_command(state);
   } else if (switch_type_ == "circulation") {
     parent_->send_circ_command(state);
+  } else if (switch_type_ == "pump1") {
+    parent_->send_pump1_command(state ? 1 : 0);  // 1=HIGH, 0=OFF
   }
   // State will be published when spa confirms the change
 }

@@ -11,6 +11,7 @@
 #include "esphome/components/select/select.h"
 #include "esphome/components/binary_sensor/binary_sensor.h"
 #include "esphome/components/text_sensor/text_sensor.h"
+#include "esphome/components/sensor/sensor.h"
 
 namespace esphome {
 namespace gecko_spa {
@@ -69,10 +70,16 @@ class GeckoSpa : public Component, public uart::UARTDevice {
   void loop() override;
   float get_setup_priority() const override { return setup_priority::DATA; }
 
-  // Entity setters
+  // Entity setters - switches (controllable)
   void set_light_switch(switch_::Switch *sw) { light_switch_ = sw; }
-  void set_pump_switch(switch_::Switch *sw) { pump_switch_ = sw; }
   void set_circ_switch(switch_::Switch *sw) { circ_switch_ = sw; }
+  void set_pump1_switch(switch_::Switch *sw) { pump1_switch_ = sw; }
+  // Entity setters - binary sensors (read-only status)
+  void set_waterfall_sensor(binary_sensor::BinarySensor *bs) { waterfall_sensor_ = bs; }
+  void set_blower_sensor(binary_sensor::BinarySensor *bs) { blower_sensor_ = bs; }
+  void set_pump2_sensor(binary_sensor::BinarySensor *bs) { pump2_sensor_ = bs; }
+  void set_pump3_sensor(binary_sensor::BinarySensor *bs) { pump3_sensor_ = bs; }
+  void set_pump4_sensor(binary_sensor::BinarySensor *bs) { pump4_sensor_ = bs; }
   void set_program_select(select::Select *sel) { program_select_ = sel; }
   void set_standby_sensor(binary_sensor::BinarySensor *bs) {
     standby_sensor_ = bs;
@@ -90,12 +97,15 @@ class GeckoSpa : public Component, public uart::UARTDevice {
   void set_spa_time_sensor(text_sensor::TextSensor *s) { spa_time_sensor_ = s; }
   void set_config_version_sensor(text_sensor::TextSensor *s) { config_version_sensor_ = s; }
   void set_status_version_sensor(text_sensor::TextSensor *s) { status_version_sensor_ = s; }
+  void set_lock_mode_sensor(text_sensor::TextSensor *s) { lock_mode_sensor_ = s; }
+  void set_pack_type_sensor(text_sensor::TextSensor *s) { pack_type_sensor_ = s; }
+  void set_pump_timer_sensor(sensor::Sensor *s) { pump_timer_sensor_ = s; }
   void set_reset_pin(GPIOPin *pin) { reset_pin_ = pin; }
 
   // Command methods
   void send_light_command(bool on);
-  void send_pump_command(bool on);
   void send_circ_command(bool on);
+  void send_pump1_command(uint8_t state);  // P1 only, state: 0=OFF, 1=HIGH, 2=LOW
   void send_program_command(uint8_t prog);
   void send_temperature_command(float temp_c);
   void request_status();
@@ -103,17 +113,24 @@ class GeckoSpa : public Component, public uart::UARTDevice {
 
   // State getters
   bool get_light_state() { return light_state_; }
-  bool get_pump_state() { return pump_state_; }
   bool get_circ_state() { return circ_state_; }
+  bool get_waterfall_state() { return waterfall_state_; }
+  uint8_t get_pump1_state() { return pump1_state_; }  // 0=OFF, 1=HIGH, 2=LOW
   float get_target_temp() { return target_temp_; }
   float get_actual_temp() { return actual_temp_; }
   bool is_heating() { return heating_state_; }
 
  protected:
-  // Entity pointers
+  // Entity pointers - switches (controllable)
   switch_::Switch *light_switch_{nullptr};
-  switch_::Switch *pump_switch_{nullptr};
   switch_::Switch *circ_switch_{nullptr};
+  switch_::Switch *pump1_switch_{nullptr};
+  // Entity pointers - binary sensors (read-only)
+  binary_sensor::BinarySensor *waterfall_sensor_{nullptr};
+  binary_sensor::BinarySensor *blower_sensor_{nullptr};
+  binary_sensor::BinarySensor *pump2_sensor_{nullptr};
+  binary_sensor::BinarySensor *pump3_sensor_{nullptr};
+  binary_sensor::BinarySensor *pump4_sensor_{nullptr};
   select::Select *program_select_{nullptr};
   binary_sensor::BinarySensor *standby_sensor_{nullptr};
   binary_sensor::BinarySensor *connected_sensor_{nullptr};
@@ -125,16 +142,27 @@ class GeckoSpa : public Component, public uart::UARTDevice {
   text_sensor::TextSensor *spa_time_sensor_{nullptr};
   text_sensor::TextSensor *config_version_sensor_{nullptr};
   text_sensor::TextSensor *status_version_sensor_{nullptr};
+  text_sensor::TextSensor *lock_mode_sensor_{nullptr};
+  text_sensor::TextSensor *pack_type_sensor_{nullptr};
+  sensor::Sensor *pump_timer_sensor_{nullptr};
   GPIOPin *reset_pin_{nullptr};
 
   // State
   bool light_state_{false};
-  bool pump_state_{false};
   bool circ_state_{false};
+  bool waterfall_state_{false};
+  bool blower_state_{false};
   bool heating_state_{false};
   bool standby_state_{false};
   bool connected_{false};
   bool first_status_received_{false};
+  uint8_t pump1_state_{0};   // 0=OFF, 1=HIGH, 2=LOW
+  uint8_t pump2_state_{0};   // Read-only
+  uint8_t pump3_state_{0};   // Read-only
+  uint8_t pump4_state_{0};   // Read-only
+  uint8_t lock_mode_{0};
+  uint8_t pack_type_{0};
+  uint8_t pump_timer_{0};
   uint8_t program_id_{0xFF};
   float target_temp_{0};
   float actual_temp_{0};

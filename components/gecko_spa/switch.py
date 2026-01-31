@@ -13,8 +13,8 @@ CONF_SWITCH_TYPE = "type"
 
 SWITCH_TYPES = {
     "light": "light",
-    "pump": "pump",
     "circulation": "circulation",
+    "pump1": "pump1",
 }
 
 CONFIG_SCHEMA = switch.switch_schema(GeckoSpaSwitch).extend(
@@ -36,7 +36,7 @@ async def to_code(config):
     switch_type = config[CONF_SWITCH_TYPE]
     if switch_type == "light":
         cg.add(parent.set_light_switch(var))
-    elif switch_type == "pump":
-        cg.add(parent.set_pump_switch(var))
     elif switch_type == "circulation":
         cg.add(parent.set_circ_switch(var))
+    elif switch_type == "pump1":
+        cg.add(parent.set_pump1_switch(var))

@@ -68,15 +68,16 @@ switch:
 
   - platform: gecko_spa
     gecko_spa_id: spa
-    type: pump
-    name: "Spa Pump"
-    icon: "mdi:pump"
-
-  - platform: gecko_spa
-    gecko_spa_id: spa
     type: circulation
     name: "Spa Circulation"
     icon: "mdi:rotate-3d-variant"
+
+  # Pump 1 (controllable)
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    type: pump1
+    name: "Spa Pump 1"
+    icon: "mdi:pump"
 
 # Program selector
 select:
@@ -99,6 +100,37 @@ binary_sensor:
     name: "Spa Connected"
     icon: "mdi:connection"
     device_class: connectivity
+
+  # Read-only status sensors (no control commands available)
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    type: waterfall
+    name: "Spa Waterfall"
+    icon: "mdi:waterfall"
+
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    type: blower
+    name: "Spa Blower"
+    icon: "mdi:fan"
+
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    type: pump2
+    name: "Spa Pump 2"
+    icon: "mdi:pump"
+
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    type: pump3
+    name: "Spa Pump 3"
+    icon: "mdi:pump"
+
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    type: pump4
+    name: "Spa Pump 4"
+    icon: "mdi:pump"
 
 # Spa internal clock and notification due dates
 text_sensor:
@@ -148,8 +180,25 @@ text_sensor:
     name: "Spa Status Version"
     icon: "mdi:file-document"
 
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    type: lock_mode
+    name: "Spa Lock Mode"
+    icon: "mdi:lock"
+
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    type: pack_type
+    name: "Spa Pack Type"
+    icon: "mdi:package-variant"
+
 # Days remaining sensors (calculated from due dates using HA time)
 sensor:
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    type: pump_timer
+    name: "Spa Pump Timer"
+
   - platform: template
     name: "Spa Rinse Filter Days"
     id: rinse_filter_days
