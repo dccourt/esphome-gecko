@@ -136,6 +136,18 @@ text_sensor:
     name: "Spa Checkup Due"
     icon: "mdi:wrench-clock"
 
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    type: config_version
+    name: "Spa Config Version"
+    icon: "mdi:file-cog"
+
+  - platform: gecko_spa
+    gecko_spa_id: spa
+    type: status_version
+    name: "Spa Status Version"
+    icon: "mdi:file-document"
+
 # Days remaining sensors (calculated from due dates using HA time)
 sensor:
   - platform: template

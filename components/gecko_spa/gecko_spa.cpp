@@ -213,16 +213,18 @@ void GeckoSpa::process_i2c_message(const uint8_t *data, uint8_t len) {
   // Continuation flag is byte[9]: 0x01 = more coming
   bool is_continuation = (len >= 10 && data[9] == 0x01);
   if (!is_continuation && msg_buffer_len_ == 0 && len > 0) {
-    char hex_str[256];
-    int pos = 0;
-    int max_bytes = (len < 120) ? len : 120;
-    for (int i = 0; i < max_bytes; i++) {
-      pos += sprintf(hex_str + pos, "%02X", data[i]);
+    // Split into 32 bytes per line (64 hex characters)
+    const int CHUNK_BYTES = 32;
+    char hex_str[68];
+    ESP_LOGI(TAG, "FULL-RX:%d bytes", len);
+    for (int offset = 0; offset < len; offset += CHUNK_BYTES) {
+      int chunk_len = (len - offset < CHUNK_BYTES) ? (len - offset) : CHUNK_BYTES;
+      int pos = 0;
+      for (int i = 0; i < chunk_len; i++) {
+        pos += sprintf(hex_str + pos, "%02X", data[offset + i]);
+      }
+      ESP_LOGI(TAG, "  %03d: %s", offset, hex_str);
     }
-    if (len > max_bytes) {
-      pos += sprintf(hex_str + pos, "...");
-    }
-    ESP_LOGI(TAG, "FULL-RX:%d:%s", len, hex_str);
   }
 
   // GO message (15 bytes, ends with "GO") - just log it
@@ -237,9 +239,26 @@ void GeckoSpa::process_i2c_message(const uint8_t *data, uint8_t len) {
       0x00, 0x00, 0x00, 0x00, 0x01, 0x00, 0x02
   };
 
-  // 33-byte config file message - send acknowledgment
+  // 33-byte config file message - parse XML filename and send acknowledgment
   if (len == 33) {
-    ESP_LOGD(TAG, "Received 33-byte handshake, sending ACK");
+    // Extract XML filename from bytes 16-28 (null-terminated string)
+    char xml_name[16];
+    int pos = 0;
+    for (int i = 16; i < 29 && data[i] != 0 && pos < 15; i++) {
+      xml_name[pos++] = (char)data[i];
+    }
+    xml_name[pos] = '\0';
+
+    ESP_LOGI(TAG, "Handshake XML: %s", xml_name);
+
+    // Publish to appropriate sensor based on filename pattern
+    // inYT_C82.xml = Config version, inYT_S81.xml = Status version
+    if (strstr(xml_name, "_C") != nullptr && config_version_sensor_) {
+      config_version_sensor_->publish_state(xml_name);
+    } else if (strstr(xml_name, "_S") != nullptr && status_version_sensor_) {
+      status_version_sensor_->publish_state(xml_name);
+    }
+
     send_i2c_message(ACK_MESSAGE, 15);
     return;
   }
@@ -295,14 +314,16 @@ void GeckoSpa::process_i2c_message(const uint8_t *data, uint8_t len) {
 
   // Multi-part message handling using byte[9] as continuation flag
   // byte[9] == 0x01: more parts coming, byte[9] == 0x00: last part
-  // Header is first 16 bytes (1709000000170A010001000040C75251), strip from subsequent parts
+  // Header is 16 bytes: [0-13]=protocol header + [14-15]=5251("RQ" frame marker)
+  // Stripping 16 bytes aligns payload with geckolib struct offsets
+  // Only concatenate messages with byte[1]=0x09 (config/status type)
   static const int HEADER_LEN = 16;
 
-  if (len >= 10) {
+  if (len >= 14 && data[1] == 0x09) {
     bool more_coming = (data[9] == 0x01);
 
-    // Add this part to buffer (strip header from all parts)
-    int payload_start = (len > HEADER_LEN) ? HEADER_LEN : 0;
+    // Add this part to buffer (strip 16-byte header including frame marker)
+    int payload_start = HEADER_LEN;
     int payload_len = len - payload_start;
     if (msg_buffer_len_ + payload_len <= sizeof(msg_buffer_)) {
       memcpy(msg_buffer_ + msg_buffer_len_, data + payload_start, payload_len);
@@ -315,23 +336,40 @@ void GeckoSpa::process_i2c_message(const uint8_t *data, uint8_t len) {
     }
 
     // Last part received - log complete message in FULL-RX format
-    char hex_str[1024];  // Large enough for 405 bytes × 2 = 810 chars + null
-    int pos = 0;
-    for (int i = 0; i < msg_buffer_len_; i++) {
-      pos += sprintf(hex_str + pos, "%02X", msg_buffer_[i]);
+    // Split into 32 bytes per line (64 hex characters)
+    const int CHUNK_BYTES = 32;
+    char hex_str[68];
+    int total_bytes = msg_buffer_len_;
+    ESP_LOGI(TAG, "FULL-RX:%d bytes", total_bytes);
+    for (int offset = 0; offset < total_bytes; offset += CHUNK_BYTES) {
+      int chunk_len = (total_bytes - offset < CHUNK_BYTES) ? (total_bytes - offset) : CHUNK_BYTES;
+      int pos = 0;
+      for (int i = 0; i < chunk_len; i++) {
+        pos += sprintf(hex_str + pos, "%02X", msg_buffer_[offset + i]);
+      }
+      ESP_LOGI(TAG, "  %03d: %s", offset, hex_str);
     }
-    ESP_LOGI(TAG, "FULL-RX:%d:%s", msg_buffer_len_, hex_str);
 
-    // Check if this is a status message (162 bytes after header stripping from all parts)
-    // (78-16) + (78-16) + (54-16) = 62 + 62 + 38 = 162 bytes
-    // Original byte[17]=0x00 indicates status data, now byte[1] after header strip
+    // Check message type by size
+    // 162 bytes = status-only message (3 parts: 78+78+54 - 3*16 headers)
+    // ~390 bytes = config+status message (8 parts with log section starting at offset 230)
     if (msg_buffer_len_ == 162 && msg_buffer_[1] == 0x00) {
-      // Log key byte positions including circ at 110
-      ESP_LOGI(TAG, "Parsing: [3]=%02X [5]=%02X [21-24]=%02X%02X%02X%02X [53]=%02X [109-112]=%02X%02X%02X%02X",
+      // Status-only message (162 bytes)
+      ESP_LOGI(TAG, "Status msg (162b): [3]=%02X [5]=%02X [21-24]=%02X%02X%02X%02X [53]=%02X",
                msg_buffer_[3], msg_buffer_[5],
-               msg_buffer_[21], msg_buffer_[22], msg_buffer_[23], msg_buffer_[24], msg_buffer_[53],
-               msg_buffer_[109], msg_buffer_[110], msg_buffer_[111], msg_buffer_[112]);
+               msg_buffer_[21], msg_buffer_[22], msg_buffer_[23], msg_buffer_[24], msg_buffer_[53]);
       parse_status_message(msg_buffer_);
+    } else if (msg_buffer_len_ >= 380 && msg_buffer_len_ <= 400) {
+      // Config+status message (~390 bytes)
+      // Status portion starts at offset 228 (390-228=162 bytes, matching status message size)
+      // Offset mapping: 162-byte byte[N] → 390-byte byte[228+N]
+      static const int STATUS_OFFSET = 228;
+      ESP_LOGI(TAG, "Config msg (%db): parsing status from offset %d", msg_buffer_len_, STATUS_OFFSET);
+
+      // Reuse the 162-byte status parser on the status portion
+      if (msg_buffer_len_ >= STATUS_OFFSET + 120) {  // Need at least 120 bytes for circ at 112
+        parse_status_message(&msg_buffer_[STATUS_OFFSET]);
+      }
     }
 
     // Reset buffer for next message

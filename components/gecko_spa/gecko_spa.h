@@ -41,6 +41,8 @@ class GeckoSpa : public Component, public uart::UARTDevice {
   void set_change_water_sensor(text_sensor::TextSensor *s) { change_water_sensor_ = s; }
   void set_spa_checkup_sensor(text_sensor::TextSensor *s) { spa_checkup_sensor_ = s; }
   void set_spa_time_sensor(text_sensor::TextSensor *s) { spa_time_sensor_ = s; }
+  void set_config_version_sensor(text_sensor::TextSensor *s) { config_version_sensor_ = s; }
+  void set_status_version_sensor(text_sensor::TextSensor *s) { status_version_sensor_ = s; }
   void set_reset_pin(GPIOPin *pin) { reset_pin_ = pin; }
 
   // Command methods
@@ -74,6 +76,8 @@ class GeckoSpa : public Component, public uart::UARTDevice {
   text_sensor::TextSensor *change_water_sensor_{nullptr};
   text_sensor::TextSensor *spa_checkup_sensor_{nullptr};
   text_sensor::TextSensor *spa_time_sensor_{nullptr};
+  text_sensor::TextSensor *config_version_sensor_{nullptr};
+  text_sensor::TextSensor *status_version_sensor_{nullptr};
   GPIOPin *reset_pin_{nullptr};
 
   // State
