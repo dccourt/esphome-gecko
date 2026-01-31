@@ -3,6 +3,7 @@
 #include <string>
 #include "esphome/core/component.h"
 #include "esphome/core/gpio.h"
+#include "esphome/core/preferences.h"
 #include "esphome/components/uart/uart.h"
 #include "esphome/components/climate/climate.h"
 #include "esphome/components/switch/switch.h"
@@ -140,11 +141,14 @@ class GeckoSpaSwitch : public Component, public switch_::Switch {
 class GeckoSpaSelect : public Component, public select::Select {
  public:
   void set_parent(GeckoSpa *parent) { parent_ = parent; }
+  void setup() override;
 
   void control(const std::string &value) override;
 
  protected:
   GeckoSpa *parent_{nullptr};
+  ESPPreferenceObject pref_;
+  uint8_t saved_index_{0xFF};
 };
 
 }  // namespace gecko_spa

@@ -558,6 +558,18 @@ void GeckoSpaSwitch::write_state(bool state) {
 }
 
 // GeckoSpaSelect implementation
+void GeckoSpaSelect::setup() {
+  // Initialize preferences
+  this->pref_ = global_preferences->make_preference<uint8_t>(this->get_object_id_hash());
+
+  // Restore saved state on boot
+  if (this->pref_.load(&this->saved_index_) && this->saved_index_ < 5) {
+    static const char *prog_names[] = {"Away", "Standard", "Energy", "Super Energy", "Weekend"};
+    this->publish_state(prog_names[this->saved_index_]);
+    ESP_LOGI("gecko_spa", "Restored program state: %s (index %d)", prog_names[this->saved_index_], this->saved_index_);
+  }
+}
+
 void GeckoSpaSelect::control(const std::string &value) {
   uint8_t prog = 1;
   if (value == "Away")
@@ -570,6 +582,10 @@ void GeckoSpaSelect::control(const std::string &value) {
     prog = 3;
   else if (value == "Weekend")
     prog = 4;
+
+  // Save the state
+  this->saved_index_ = prog;
+  this->pref_.save(&this->saved_index_);
 
   parent_->send_program_command(prog);
   this->publish_state(value);
