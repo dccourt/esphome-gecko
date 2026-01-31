@@ -209,6 +209,22 @@ void GeckoSpa::process_i2c_message(const uint8_t *data, uint8_t len) {
     ESP_LOGI(TAG, "Spa connected (I2C traffic detected)");
   }
 
+  // Log standalone messages as FULL-RX (not continuation parts of multi-part messages)
+  // Continuation flag is byte[9]: 0x01 = more coming
+  bool is_continuation = (len >= 10 && data[9] == 0x01);
+  if (!is_continuation && msg_buffer_len_ == 0 && len > 0) {
+    char hex_str[256];
+    int pos = 0;
+    int max_bytes = (len < 120) ? len : 120;
+    for (int i = 0; i < max_bytes; i++) {
+      pos += sprintf(hex_str + pos, "%02X", data[i]);
+    }
+    if (len > max_bytes) {
+      pos += sprintf(hex_str + pos, "...");
+    }
+    ESP_LOGI(TAG, "FULL-RX:%d:%s", len, hex_str);
+  }
+
   // GO message (15 bytes, ends with "GO") - just log it
   if (len == 15 && data[13] == 0x47 && data[14] == 0x4F) {
     ESP_LOGD(TAG, "Received GO message from spa");
