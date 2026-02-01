@@ -193,6 +193,11 @@ class GeckoSpa : public Component, public uart::UARTDevice {
   // GO keep-alive message
   static const uint8_t GO_MESSAGE[15];
 
+  // Autodetected status message length
+  // Currently we don't parse beyond offset 112, so a min length of 120 is safe.
+  uint16_t status_msg_len_{0};
+  static const uint16_t MIN_STATUS_MSG_LEN{120};
+
   uint8_t calc_checksum(const uint8_t *data, uint8_t len);
   void send_i2c_message(const uint8_t *data, uint8_t len);
   uint8_t hex_to_byte(char high, char low);

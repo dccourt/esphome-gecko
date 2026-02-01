@@ -417,20 +417,37 @@ void GeckoSpa::process_i2c_message(const uint8_t *data, uint8_t len) {
     }
 
     // Check message type by size
+    // ~162 bytes = status-only message (3 parts: 78+78+54 - 3*16 headers)
+    // ~390 bytes = config+status message (8 parts with log section starting at offset 230)
+
+    // We expect status message to be around 150 bytes long, but it varies per spa pack model
+    // and software version.  The length will be consistent per pack, so once we've detected
+    // it we can assume that all future messages at that length are status messages.  Assume
+    // that anything between MIN_STATUS_MSG_LEN and 170 bytes long, with a 0 byte at offset 1,
+    // is a status message if we don't yet know the correct length.
+    if (status_msg_len_ == 0) {
+      if ((msg_buffer_len_ >= MIN_STATUS_MSG_LEN) &&
+          (msg_buffer_len_ <= 170) &&
+          (msg_buffer_[1] == 0x00)) {
+        ESP_LOGI(TAG, "Auto-detect %d as the standard status message length", msg_buffer_len_);
+        status_msg_len_ = msg_buffer_len_;
+      }
+    }
+
+    // Check message type by size
     // 162 bytes = status-only message (3 parts: 78+78+54 - 3*16 headers)
     // ~390 bytes = config+status message (8 parts with log section starting at offset 230)
-    if (msg_buffer_len_ == 162 && msg_buffer_[1] == 0x00) {
+    if (msg_buffer_len_ == status_msg_len_ && msg_buffer_[1] == 0x00) {
       // Status-only message (162 bytes)
-      ESP_LOGI(TAG, "Status msg (162b): [3]=%02X [5]=%02X [21-24]=%02X%02X%02X%02X [53]=%02X",
+      ESP_LOGI(TAG, "Status msg (%db): [3]=%02X [5]=%02X [21-24]=%02X%02X%02X%02X [53]=%02X",
+               msg_buffer_len_,
                msg_buffer_[3], msg_buffer_[5],
                msg_buffer_[21], msg_buffer_[22], msg_buffer_[23], msg_buffer_[24], msg_buffer_[53]);
       parse_status_message(msg_buffer_);
-    } else if (msg_buffer_len_ >= 380 && msg_buffer_len_ <= 400) {
+    } else if (msg_buffer_len_ >= 300 && msg_buffer_len_ <= 400) {
       // Config+status message (~390 bytes)
       // Config section has +2 byte offset (geckolib offset N → message byte N+2)
-      // Status portion starts at offset 228
       static const int CFG_OFFSET = 2;  // Config struct offset
-      static const int STATUS_OFFSET = 228;
 
       // Parse config section (with +2 offset from geckolib struct definitions)
       // Geckolib offsets → message bytes: N → N+2
@@ -461,9 +478,16 @@ void GeckoSpa::process_i2c_message(const uint8_t *data, uint8_t len) {
                customer_id, num_zones,
                silent_mode < 5 ? silent_str[silent_mode] : "?");
 
-      // Reuse the 162-byte status parser on the status portion
-      if (msg_buffer_len_ >= STATUS_OFFSET + 120) {
-        parse_status_message(&msg_buffer_[STATUS_OFFSET]);
+      // Reuse the status parser on the status portion, if we know what the length of the
+      // status message should be.
+      if (status_msg_len_ != 0) {
+        // Status portion is the very end of the message
+        int STATUS_OFFSET = msg_buffer_len_ - status_msg_len_;
+        // Check for some expected byte markers
+        if ((msg_buffer_[STATUS_OFFSET - 1] == 0x3B) &&
+            (msg_buffer_[STATUS_OFFSET + 1] == 0)) {
+          parse_status_message(&msg_buffer_[STATUS_OFFSET]);
+        }
       }
     }
 
