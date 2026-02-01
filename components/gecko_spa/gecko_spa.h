@@ -176,6 +176,7 @@ class GeckoSpa : public Component, public uart::UARTDevice {
   uint32_t last_go_send_time_{0};
   uint32_t reset_start_time_{0};
   bool reset_in_progress_{false};
+  char notification_date_[4][12]{ "", "", "", ""};
 
   // Version tracking (parsed from handshake XML filenames)
   uint8_t config_version_{0};   // e.g., 82 from inYT_C82.xml

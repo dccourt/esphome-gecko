@@ -821,8 +821,14 @@ void GeckoSpa::parse_notification_message(const uint8_t *data) {
         break;
     }
 
-    if (sensor) {
-      sensor->publish_state(date_str);
+    // Publish state if it has changed
+    if (strcmp(date_str, notification_date_[id - 1]))
+    {
+      ESP_LOGI(TAG, "Publish changed notification %d : %s", id, date_str);
+      if (sensor) {
+        sensor->publish_state(date_str);
+      }
+      strcpy(notification_date_[id - 1], date_str);
     }
   }
 }
