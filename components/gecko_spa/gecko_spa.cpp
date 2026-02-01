@@ -385,7 +385,7 @@ void GeckoSpa::process_i2c_message(const uint8_t *data, uint8_t len) {
   // Only concatenate messages with byte[1]=0x09 (config/status type)
   static const int HEADER_LEN = 16;
 
-  if (len >= 14 && data[1] == 0x09) {
+  if (len >= HEADER_LEN && data[1] == 0x09) {
     bool more_coming = (data[9] == 0x01);
 
     // Add this part to buffer (strip 16-byte header including frame marker)
@@ -437,7 +437,9 @@ void GeckoSpa::process_i2c_message(const uint8_t *data, uint8_t len) {
     // Check message type by size
     // 162 bytes = status-only message (3 parts: 78+78+54 - 3*16 headers)
     // ~390 bytes = config+status message (8 parts with log section starting at offset 230)
-    if (msg_buffer_len_ == status_msg_len_ && msg_buffer_[1] == 0x00) {
+    if ((msg_buffer_len_ == status_msg_len_) &&
+        (status_msg_len_ != 0) &&
+        (msg_buffer_[1] == 0x00)) {
       // Status-only message (162 bytes)
       ESP_LOGI(TAG, "Status msg (%db): [3]=%02X [5]=%02X [21-24]=%02X%02X%02X%02X [53]=%02X",
                msg_buffer_len_,
