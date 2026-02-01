@@ -782,9 +782,16 @@ void GeckoSpa::parse_notification_message(const uint8_t *data) {
   for (int i = 0; i < 4; i++) {
     int offset = 16 + (i * 6);
     uint8_t id = data[offset];
-    uint8_t reset_day = data[offset + 1];
-    uint8_t reset_month = data[offset + 2];
-    uint8_t reset_year = data[offset + 3];  // 2-digit year
+    uint8_t reset_day, reset_month, reset_year;
+    if (notif_date_format_ == NotifDateFormat::D_M_Y) {
+      reset_day = data[offset + 1];
+      reset_month = data[offset + 2];
+      reset_year = data[offset + 3];  // 2-digit year
+    } else {
+      reset_year = data[offset + 1];  // 2-digit year
+      reset_month = data[offset + 2];
+      reset_day = data[offset + 3];
+    }
     uint16_t interval = data[offset + 4] | (data[offset + 5] << 8);
 
     if (id == 0 || interval == 0)

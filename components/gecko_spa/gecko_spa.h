@@ -64,6 +64,11 @@ static const GeckoLogOffsets GECKO_LOG_OFFSETS_V50 = {
 
 class GeckoSpaClimate;
 
+enum class NotifDateFormat : uint8_t {
+  Y_M_D = 0,
+  D_M_Y = 1
+};
+
 class GeckoSpa : public Component, public uart::UARTDevice {
  public:
   void setup() override;
@@ -101,6 +106,7 @@ class GeckoSpa : public Component, public uart::UARTDevice {
   void set_pack_type_sensor(text_sensor::TextSensor *s) { pack_type_sensor_ = s; }
   void set_pump_timer_sensor(sensor::Sensor *s) { pump_timer_sensor_ = s; }
   void set_reset_pin(GPIOPin *pin) { reset_pin_ = pin; }
+  void set_notif_date_format(NotifDateFormat format) { notif_date_format_ = format; }
 
   // Command methods
   void send_light_command(bool on);
@@ -152,6 +158,7 @@ class GeckoSpa : public Component, public uart::UARTDevice {
   text_sensor::TextSensor *pack_type_sensor_{nullptr};
   sensor::Sensor *pump_timer_sensor_{nullptr};
   GPIOPin *reset_pin_{nullptr};
+  NotifDateFormat notif_date_format_{NotifDateFormat::D_M_Y};
 
   // State
   bool light_state_{false};
