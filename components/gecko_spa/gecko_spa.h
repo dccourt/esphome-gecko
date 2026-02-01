@@ -64,6 +64,11 @@ static const GeckoLogOffsets GECKO_LOG_OFFSETS_V50 = {
 
 class GeckoSpaClimate;
 
+enum class NotifDateFormat : uint8_t {
+  Y_M_D = 0,
+  D_M_Y = 1
+};
+
 class GeckoSpa : public Component, public uart::UARTDevice {
  public:
   void setup() override;
@@ -101,6 +106,7 @@ class GeckoSpa : public Component, public uart::UARTDevice {
   void set_pack_type_sensor(text_sensor::TextSensor *s) { pack_type_sensor_ = s; }
   void set_pump_timer_sensor(sensor::Sensor *s) { pump_timer_sensor_ = s; }
   void set_reset_pin(GPIOPin *pin) { reset_pin_ = pin; }
+  void set_notif_date_format(NotifDateFormat format) { notif_date_format_ = format; }
 
   // Command methods
   void send_light_command(bool on);
@@ -152,6 +158,7 @@ class GeckoSpa : public Component, public uart::UARTDevice {
   text_sensor::TextSensor *pack_type_sensor_{nullptr};
   sensor::Sensor *pump_timer_sensor_{nullptr};
   GPIOPin *reset_pin_{nullptr};
+  NotifDateFormat notif_date_format_{NotifDateFormat::D_M_Y};
 
   // State
   bool light_state_{false};
@@ -176,6 +183,7 @@ class GeckoSpa : public Component, public uart::UARTDevice {
   uint32_t last_go_send_time_{0};
   uint32_t reset_start_time_{0};
   bool reset_in_progress_{false};
+  char notification_date_[4][12]{ "", "", "", ""};
 
   // Version tracking (parsed from handshake XML filenames)
   uint8_t config_version_{0};   // e.g., 82 from inYT_C82.xml
@@ -192,6 +200,11 @@ class GeckoSpa : public Component, public uart::UARTDevice {
 
   // GO keep-alive message
   static const uint8_t GO_MESSAGE[15];
+
+  // Autodetected status message length
+  // Currently we don't parse beyond offset 112, so a min length of 120 is safe.
+  uint16_t status_msg_len_{0};
+  static const uint16_t MIN_STATUS_MSG_LEN{120};
 
   uint8_t calc_checksum(const uint8_t *data, uint8_t len);
   void send_i2c_message(const uint8_t *data, uint8_t len);
