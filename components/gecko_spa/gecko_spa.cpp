@@ -62,11 +62,21 @@ void GeckoSpa::loop() {
   }
 }
 
+void GeckoSpa::update_command_version(uint8_t *cmd) {
+  // Update version byte in command string, based on spa pack version.
+  // Version byte is at offset 12 for config/status messages, offset 13 for others
+  uint8_t version_offset = 14;
+
+  cmd[version_offset] = config_version_;
+  cmd[version_offset+1] = status_version_;
+}
+
 void GeckoSpa::send_light_command(bool on) {
   uint8_t cmd[20] = {
       0x17, 0x0A, 0x00, 0x00, 0x00, 0x17, 0x09, 0x00,
       0x00, 0x00, 0x00, 0x00, 0x06, 0x46, 0x52, 0x51,
       0x01, 0x33, (uint8_t)(on ? 0x01 : 0x00), 0x00};
+  update_command_version(cmd);
   cmd[19] = calc_checksum(cmd, 20);
   send_i2c_message(cmd, 20);
   ESP_LOGI(TAG, "Sent light %s command", on ? "ON" : "OFF");
@@ -77,6 +87,7 @@ void GeckoSpa::send_circ_command(bool on) {
       0x17, 0x0A, 0x00, 0x00, 0x00, 0x17, 0x09, 0x00,
       0x00, 0x00, 0x00, 0x00, 0x06, 0x46, 0x52, 0x51,
       0x01, 0x6B, (uint8_t)(on ? 0x01 : 0x00), 0x00};
+  update_command_version(cmd);
   cmd[19] = calc_checksum(cmd, 20);
   send_i2c_message(cmd, 20);
   ESP_LOGI(TAG, "Sent circ %s command", on ? "ON" : "OFF");
@@ -91,6 +102,7 @@ void GeckoSpa::send_pump1_command(uint8_t state) {
       0x17, 0x0A, 0x00, 0x00, 0x00, 0x17, 0x09, 0x00,
       0x00, 0x00, 0x00, 0x00, 0x06, 0x46, 0x52, 0x51,
       0x01, 0x03, state_val, 0x00};
+  update_command_version(cmd);
   cmd[19] = calc_checksum(cmd, 20);
   send_i2c_message(cmd, 20);
   ESP_LOGI(TAG, "Sent P1 state=%d command (val=0x%02X)", state, state_val);
@@ -104,6 +116,7 @@ void GeckoSpa::send_pump2_command(uint8_t state) {
       0x17, 0x0A, 0x00, 0x00, 0x00, 0x17, 0x09, 0x00,
       0x00, 0x00, 0x00, 0x00, 0x06, 0x46, 0x52, 0x51,
       0x01, 0x04, state_val, 0x00};
+  update_command_version(cmd);
   cmd[19] = calc_checksum(cmd, 20);
   send_i2c_message(cmd, 20);
   ESP_LOGI(TAG, "Sent P2 state=%d command (val=0x%02X) [EXPERIMENTAL]", state, state_val);
@@ -117,6 +130,7 @@ void GeckoSpa::send_pump3_command(uint8_t state) {
       0x17, 0x0A, 0x00, 0x00, 0x00, 0x17, 0x09, 0x00,
       0x00, 0x00, 0x00, 0x00, 0x06, 0x46, 0x52, 0x51,
       0x01, 0x05, state_val, 0x00};
+  update_command_version(cmd);
   cmd[19] = calc_checksum(cmd, 20);
   send_i2c_message(cmd, 20);
   ESP_LOGI(TAG, "Sent P3 state=%d command (val=0x%02X) [EXPERIMENTAL]", state, state_val);
@@ -130,6 +144,7 @@ void GeckoSpa::send_pump4_command(uint8_t state) {
       0x17, 0x0A, 0x00, 0x00, 0x00, 0x17, 0x09, 0x00,
       0x00, 0x00, 0x00, 0x00, 0x06, 0x46, 0x52, 0x51,
       0x01, 0x06, state_val, 0x00};
+  update_command_version(cmd);
   cmd[19] = calc_checksum(cmd, 20);
   send_i2c_message(cmd, 20);
   ESP_LOGI(TAG, "Sent P4 state=%d command (val=0x%02X) [EXPERIMENTAL]", state, state_val);
@@ -156,6 +171,7 @@ void GeckoSpa::send_temperature_command(float temp_c) {
       0x17, 0x0A, 0x00, 0x00, 0x00, 0x17, 0x09, 0x00,
       0x00, 0x00, 0x00, 0x00, 0x07, 0x46, 0x52, 0x51,
       0x00, 0x01, 0x02, temp_raw, 0x00};
+  update_command_version(cmd);
   cmd[20] = calc_checksum(cmd, 21);
   send_i2c_message(cmd, 21);
   ESP_LOGI(TAG, "Sent temperature %.1f command (raw=%02X)", temp_c, temp_raw);
