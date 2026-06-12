@@ -169,6 +169,7 @@ class GeckoSpa : public Component, public uart::UARTDevice {
   bool standby_state_{false};
   bool connected_{false};
   bool first_status_received_{false};
+  uint8_t user_demand_state_{0};  // Bitfield from udP1-udP4 (P1-P4 user demand)
   uint8_t pump1_state_{0};   // 0=OFF, 1=HIGH, 2=LOW
   uint8_t pump2_state_{0};   // Read-only
   uint8_t pump3_state_{0};   // Read-only
@@ -208,7 +209,6 @@ class GeckoSpa : public Component, public uart::UARTDevice {
   uint16_t status_msg_len_{0};
   static const uint16_t MIN_STATUS_MSG_LEN{120};
 
-  void update_command_version(uint8_t *cmd); // Update version byte in command based on detected spa pack version
   uint8_t calc_checksum(const uint8_t *data, uint8_t len);
   void send_i2c_message(const uint8_t *data, uint8_t len);
   uint8_t hex_to_byte(char high, char low);
